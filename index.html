@@ -10,35 +10,36 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-app: #090d16;
-      --bg-card: #111827;
-      --bg-soft: #1a2336;
-      --border-subtle: rgba(148, 163, 184, 0.16);
-      --accent: #38bdf8;
-      --accent-2: #10b981;
-      --warn: #f59e0b;
-      --danger: #ef4444;
+      --bg-app: #f1f5f9;
+      --bg-card: #ffffff;
+      --border-subtle: rgba(15, 23, 42, 0.09);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
       margin: 0;
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at 15% 0%, #13223b 0%, var(--bg-app) 55%);
-      color: #f8fafc;
+      background: linear-gradient(180deg, #e0f2fe 0%, #f8fafc 38%, #f1f5f9 100%);
+      color: #0f172a;
       min-height: 100dvh;
       overflow-x: hidden;
     }
-    .glass-card {
-      background: linear-gradient(180deg, rgba(23, 33, 53, 0.92) 0%, rgba(15, 23, 42, 0.95) 100%);
+    .light-card {
+      background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--border-subtle);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
     }
-    @keyframes chatPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.8), inset 0 0 0 1px rgba(251, 191, 36, 0.9); background-color: rgba(245, 158, 11, 0.24); }
-      50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0), inset 0 0 0 2px rgba(253, 224, 71, 1); background-color: rgba(245, 158, 11, 0.42); }
+    @keyframes chatPulseLight {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.65), inset 0 0 0 2px rgba(245, 158, 11, 0.95);
+        background-color: #fef3c7;
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(245, 158, 11, 0), inset 0 0 0 2px rgba(217, 119, 6, 1);
+        background-color: #fde68a;
+      }
     }
     .chat-alert-blink {
-      animation: chatPulse 0.85s ease-in-out infinite;
+      animation: chatPulseLight 0.85s ease-in-out infinite;
     }
     .tablet-force .split-pane {
       display: grid;
@@ -61,9 +62,9 @@
 <body class="select-none">
   <div id="app" class="min-h-dvh flex flex-col max-w-md mx-auto transition-all duration-200"></div>
 
-  <!-- Modal genérico para confirmaciones, ajustes de turno, pagos y enlaces -->
-  <div id="modal-root" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-xs p-3">
-    <div id="modal-box" class="glass-card w-full max-w-sm rounded-2xl p-4 text-slate-100"></div>
+  <!-- Modal genérico -->
+  <div id="modal-root" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/45 backdrop-blur-xs p-3">
+    <div id="modal-box" class="light-card w-full max-w-sm rounded-2xl p-4 text-slate-900"></div>
   </div>
 
   <script>
@@ -78,11 +79,11 @@
         masterPasswordHash: null,
         updatedAt: Date.now()
       },
-      employees: {},   // { [empId]: { id, name, password, dailyHours, rateHistory: [{ effectiveDate, rate }], createdAt } }
-      shifts: {},      // { [shiftId]: { id, empId, date, startTs, endTs, status: 'open'|'pending'|'confirmed', confirmedBy, confirmedAt, adjustedAt, excessAlertDismissed } }
-      tasks: {},       // { [taskId]: { id, empId, date, title, done, createdAt } }
-      chats: {},       // { [empId]: { [msgId]: { id, senderRole, senderName, text, kind: 'user'|'system', ts } } }
-      closures: {}     // { [`${empId}_${YYYY-MM}`]: { empId, monthKey, amountPaid, paidDate, closedAt } }
+      employees: {},
+      shifts: {},
+      tasks: {},
+      chats: {},
+      closures: {}
     });
 
     // =========================================================================
@@ -104,13 +105,14 @@
       ownerCalMonth: currentYearMonth(),
       tabletMode: localStorage.getItem("hc_tablet_mode") === "1",
       soundMuted: localStorage.getItem("hc_sound_muted") === "1",
-      unreadChat: {},          // { [empId]: boolean }
-      blinkingChat: {},        // { [empId]: boolean }
+      unreadChat: {},
+      blinkingChat: {},
       data: DEFAULT_HOME_DATA(),
-      syncStatus: "local",     // 'connected' | 'syncing' | 'local'
+      syncStatus: "local",
       pollTimer: null,
       clockTimer: null,
-      audioCtx: null
+      audioCtx: null,
+      isBusyAction: false
     };
 
     // =========================================================================
@@ -135,7 +137,7 @@
     }
 
     function formatDateShort(dateStr) {
-      const [y, m, d] = dateStr.split("-");
+      const [, m, d] = dateStr.split("-");
       return `${d}/${m}`;
     }
 
@@ -149,7 +151,6 @@
 
     function formatExactEuro(amount) {
       const val = Number(amount) || 0;
-      // Sin redondeo artificial oculto: muestra exacto hasta 4 decimales si hay fracciones, o 2 decimales limpios
       const str = Number.isInteger(val * 100) ? val.toFixed(2) : String(Number(val.toFixed(4)));
       return `${str.replace(".", ",")} €`;
     }
@@ -170,14 +171,6 @@
       if (!shift || !shift.startTs) return 0;
       const end = shift.endTs || (shift.status === "open" ? nowTs : shift.startTs);
       return Math.max(0, end - shift.startTs);
-    }
-
-    function getShiftExactAmount(emp, shift) {
-      if (!shift || shift.status !== "confirmed") return 0;
-      const durMs = getShiftDurationMs(shift, shift.endTs || shift.startTs);
-      const exactHours = durMs / 3600000;
-      const rate = getRateForDate(emp, shift.date);
-      return exactHours * rate;
     }
 
     function getMonthSummary(empId, monthKey) {
@@ -241,7 +234,7 @@
     }
 
     // =========================================================================
-    // SONIDO "PIPIP... PIPIP... PIPIP" POR WEB AUDIO API (SIN ARCHIVOS EXTERNOS)
+    // SONIDO "PIPIP... PIPIP... PIPIP" POR WEB AUDIO API
     // =========================================================================
     let soundIntervalId = null;
 
@@ -256,7 +249,6 @@
         }
         const ctx = state.audioCtx;
         const now = ctx.currentTime;
-        // Tres "pipip" dobles suaves y claros
         const pulses = [0, 0.14, 0.45, 0.59, 0.9, 1.04];
         pulses.forEach((offset) => {
           const osc = ctx.createOscillator();
@@ -346,7 +338,6 @@
         const nextMsgs = nextChats[empId] || {};
         for (const msgId of Object.keys(nextMsgs)) {
           if (!prevMsgs[msgId]) {
-            const msg = nextMsgs[msgId];
             const isViewingThisChat =
               (state.role === "employee" && state.activeEmpId === empId && state.empTab === "chat") ||
               (state.role === "owner" && state.ownerSubTab === "chat" && state.ownerChatEmpId === empId);
@@ -413,13 +404,13 @@
       if (!code) return;
       pullFromFirebase(code, false).then(() => render());
       state.pollTimer = setInterval(async () => {
-        if (!state.homeCode) return;
+        if (!state.homeCode || state.isBusyAction) return;
         const prevJson = JSON.stringify(state.data);
         await pullFromFirebase(state.homeCode, true);
         if (JSON.stringify(state.data) !== prevJson) {
           render();
         }
-      }, 2200);
+      }, 2500);
     }
 
     function stopRealtimeSync() {
@@ -430,10 +421,11 @@
     }
 
     // =========================================================================
-    // ACCIONES DE DOMINIO (CHAT, FICHAJES, CONFIRMACIÓN, TAREAS, CIERRES)
+    // ACCIONES DE DOMINIO
     // =========================================================================
-    async function appendChatMessage(empId, senderRole, senderName, text, kind = "user") {
+    function addChatMessageLocal(empId, senderRole, senderName, text, kind = "user") {
       if (!empId || !text || !text.trim()) return;
+      if (!state.data.chats) state.data.chats = {};
       if (!state.data.chats[empId]) state.data.chats[empId] = {};
       const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       state.data.chats[empId][id] = {
@@ -444,6 +436,13 @@
         kind,
         ts: Date.now()
       };
+    }
+
+    async function appendChatMessage(empId, senderRole, senderName, text, kind = "user") {
+      if (!empId || !text || !text.trim()) return;
+      addChatMessageLocal(empId, senderRole, senderName, text, kind);
+      saveLocal(state.homeCode, state.data);
+      render();
       await pushToFirebase(state.homeCode, state.data);
       render();
     }
@@ -461,54 +460,77 @@
     }
 
     async function clockInEmployee(empId) {
+      if (state.isBusyAction) return;
       const emp = state.data.employees[empId];
       if (!emp || hasOpenShift(empId)) return;
-      const now = Date.now();
-      const shiftId = `sh_${now}_${Math.random().toString(36).slice(2, 6)}`;
-      const dateStr = toDateStr(now);
-      state.data.shifts[shiftId] = {
-        id: shiftId,
-        empId,
-        date: dateStr,
-        startTs: now,
-        endTs: null,
-        status: "open",
-        confirmedBy: null,
-        confirmedAt: null,
-        adjustedAt: null,
-        excessNotified: false
-      };
-      await appendChatMessage(
-        empId,
-        "employee",
-        emp.name,
-        `Entrada fichada a las ${formatTimeHM(now)} (${formatDateShort(dateStr)}). Turno en curso.`,
-        "system"
-      );
+
+      state.isBusyAction = true;
+      try {
+        const now = Date.now();
+        const shiftId = `sh_${now}_${Math.random().toString(36).slice(2, 6)}`;
+        const dateStr = toDateStr(now);
+        if (!state.data.shifts) state.data.shifts = {};
+        state.data.shifts[shiftId] = {
+          id: shiftId,
+          empId,
+          date: dateStr,
+          startTs: now,
+          endTs: null,
+          status: "open",
+          confirmedBy: null,
+          confirmedAt: null,
+          adjustedAt: null,
+          excessNotified: false
+        };
+        addChatMessageLocal(
+          empId,
+          "employee",
+          emp.name,
+          `Entrada fichada a las ${formatTimeHM(now)} (${formatDateShort(dateStr)}). Turno en curso.`,
+          "system"
+        );
+        saveLocal(state.homeCode, state.data);
+        render();
+        await pushToFirebase(state.homeCode, state.data);
+        render();
+      } finally {
+        state.isBusyAction = false;
+      }
     }
 
     async function clockOutEmployee(empId) {
+      if (state.isBusyAction) return;
       const emp = state.data.employees[empId];
       const openShift = getOpenShift(empId);
       if (!emp || !openShift) return;
-      const now = Date.now();
-      const safeEnd = Math.max(openShift.startTs + 60000, now);
-      openShift.endTs = safeEnd;
-      openShift.status = "pending";
 
-      const dur = msToHoursMinutes(safeEnd - openShift.startTs);
-      const allowedMinutes = (Number(emp.dailyHours) || 8) * 60 + 60;
-      const exceedsOneHour = dur.totalMinutes > allowedMinutes;
-      if (exceedsOneHour) {
-        openShift.excessNotified = true;
+      state.isBusyAction = true;
+      try {
+        const now = Date.now();
+        const safeEnd = Math.max(openShift.startTs + 60000, now);
+        openShift.endTs = safeEnd;
+        openShift.status = "pending";
+
+        const dur = msToHoursMinutes(safeEnd - openShift.startTs);
+        const allowedMinutes = (Number(emp.dailyHours) || 8) * 60 + 60;
+        const exceedsOneHour = dur.totalMinutes > allowedMinutes;
+        if (exceedsOneHour) {
+          openShift.excessNotified = true;
+        }
+
+        const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación del propietario.`;
+        const alertMsg = exceedsOneHour
+          ? ` ⚠️ EXCESO (+1h sobre ficha de ${emp.dailyHours}h): revisar y ajustar hora real de salida.`
+          : "";
+
+        addChatMessageLocal(empId, "employee", emp.name, baseMsg + alertMsg, "system");
+        saveLocal(state.homeCode, state.data);
+        render();
+        await pushToFirebase(state.homeCode, state.data);
+        render();
+      } finally {
+        state.isBusyAction = false;
       }
-
-      const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación del propietario.`;
-      const alertMsg = exceedsOneHour
-        ? ` ⚠️ EXCESO (+1h sobre ficha de ${emp.dailyHours}h): revisar y ajustar hora real de salida.`
-        : "";
-
-      await appendChatMessage(empId, "employee", emp.name, baseMsg + alertMsg, "system");
     }
 
     async function confirmShift(shiftId) {
@@ -535,7 +557,6 @@
     async function saveAdjustedShift(shiftId, newStartStr, newEndStr, alsoConfirm) {
       const shift = state.data.shifts[shiftId];
       if (!shift) return;
-      const emp = state.data.employees[shift.empId];
       const [y, m, d] = shift.date.split("-").map(Number);
 
       const [sh, sm] = newStartStr.split(":").map(Number);
@@ -595,12 +616,12 @@
       if (!emp || !openShift) return;
       const elapsed = msToHoursMinutes(Date.now() - openShift.startTs).text;
       openModal(`
-        <div class="text-sm font-bold text-amber-300 mb-1">Confirmar fichaje de salida</div>
-        <p class="text-xs text-slate-300 mb-3">
-          Vas a cerrar la entrada de las <strong class="text-white">${formatTimeHM(openShift.startTs)}</strong> (tiempo actual: <strong class="text-white">${elapsed}</strong>). Quedará pendiente de confirmación del propietario.
+        <div class="text-sm font-extrabold text-amber-700 mb-1">Confirmar fichaje de salida</div>
+        <p class="text-xs text-slate-600 mb-3">
+          Vas a cerrar la entrada de las <strong class="text-slate-900">${formatTimeHM(openShift.startTs)}</strong> (tiempo actual: <strong class="text-slate-900">${elapsed}</strong>). Quedará pendiente de confirmación del propietario.
         </p>
         <div class="flex gap-2 justify-end">
-          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
           <button id="btn-confirm-clockout" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">Fichar Salida</button>
         </div>
       `);
@@ -619,27 +640,27 @@
 
       openModal(`
         <div class="flex items-center justify-between mb-2">
-          <div class="text-sm font-bold text-sky-300">Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
-          <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+          <div class="text-sm font-extrabold text-sky-700">Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
+          <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
         </div>
-        <div class="text-[11px] text-slate-400 mb-3">Fecha: <span class="text-slate-200 font-semibold">${shift.date}</span></div>
+        <div class="text-[11px] text-slate-500 mb-3">Fecha: <span class="text-slate-800 font-bold">${shift.date}</span></div>
         <div class="grid grid-cols-2 gap-2.5 mb-3">
           <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Hora entrada</label>
-            <input id="edit-shift-start" type="time" value="${startHM}" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white" />
+            <label class="block text-[11px] text-slate-600 mb-1 font-semibold">Hora entrada</label>
+            <input id="edit-shift-start" type="time" value="${startHM}" class="w-full rounded-xl bg-slate-100 border border-slate-300 px-2.5 py-2 text-xs text-slate-900 font-semibold" />
           </div>
           <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Hora salida</label>
-            <input id="edit-shift-end" type="time" value="${endHM}" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white" />
+            <label class="block text-[11px] text-slate-600 mb-1 font-semibold">Hora salida</label>
+            <input id="edit-shift-end" type="time" value="${endHM}" class="w-full rounded-xl bg-slate-100 border border-slate-300 px-2.5 py-2 text-xs text-slate-900 font-semibold" />
           </div>
         </div>
-        <label class="flex items-center gap-2 text-xs text-emerald-300 mb-4 cursor-pointer">
-          <input id="edit-shift-confirm" type="checkbox" checked class="rounded accent-emerald-400" />
+        <label class="flex items-center gap-2 text-xs text-emerald-700 font-semibold mb-4 cursor-pointer">
+          <input id="edit-shift-confirm" type="checkbox" checked class="rounded accent-emerald-600" />
           <span>Confirmar turno y sumar a horas/euros al guardar</span>
         </label>
         <div class="flex gap-2 justify-end">
-          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
-          <button id="btn-save-shift" class="px-3.5 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Guardar y avisar</button>
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
+          <button id="btn-save-shift" class="px-3.5 py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold">Guardar y avisar</button>
         </div>
       `);
 
@@ -657,21 +678,21 @@
       const shareUrl = `${window.location.origin}${window.location.pathname}?hogar=${encodeURIComponent(state.homeCode)}`;
       openModal(`
         <div class="flex items-center justify-between mb-2">
-          <div class="text-sm font-bold text-sky-300">Código y enlace del hogar</div>
-          <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+          <div class="text-sm font-extrabold text-sky-700">Código y enlace del hogar</div>
+          <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
         </div>
-        <p class="text-xs text-slate-300 mb-2">Comparte este código o enlace para vincular otros propietarios o empleadas:</p>
-        <div class="rounded-xl bg-slate-900 border border-slate-700 p-2.5 mb-2">
-          <div class="text-[10px] uppercase tracking-wider text-slate-400">Código de hogar</div>
-          <div class="text-base font-extrabold text-sky-300 tracking-wider">${escapeHtml(state.homeCode)}</div>
+        <p class="text-xs text-slate-600 mb-2">Comparte este código o enlace para vincular otros propietarios o empleadas:</p>
+        <div class="rounded-xl bg-slate-100 border border-slate-200 p-2.5 mb-2">
+          <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Código de hogar</div>
+          <div class="text-base font-extrabold text-sky-700 tracking-wider">${escapeHtml(state.homeCode)}</div>
         </div>
-        <div class="rounded-xl bg-slate-900 border border-slate-700 p-2.5 mb-3">
-          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">Enlace directo</div>
-          <div id="share-link-text" class="text-[11px] text-slate-200 break-all select-all">${escapeHtml(shareUrl)}</div>
+        <div class="rounded-xl bg-slate-100 border border-slate-200 p-2.5 mb-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-0.5">Enlace directo</div>
+          <div id="share-link-text" class="text-[11px] text-slate-800 break-all select-all">${escapeHtml(shareUrl)}</div>
         </div>
         <div class="flex gap-2 justify-end">
-          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cerrar</button>
-          <button id="btn-copy-link" class="px-3.5 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Copiar enlace</button>
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold">Cerrar</button>
+          <button id="btn-copy-link" class="px-3.5 py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold">Copiar enlace</button>
         </div>
       `);
       document.getElementById("btn-copy-link").onclick = () => {
@@ -738,78 +759,76 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                <div class="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/40 flex items-center justify-center text-sky-300 font-extrabold text-sm">HC</div>
+                <div class="w-9 h-9 rounded-xl bg-sky-500 text-white flex items-center justify-center font-extrabold text-sm shadow-xs">HC</div>
                 <div>
-                  <h1 class="text-base font-extrabold tracking-tight text-white leading-none">HomeControl</h1>
-                  <span class="text-[11px] text-slate-400">Control de horarios y pagos</span>
+                  <h1 class="text-base font-extrabold tracking-tight text-slate-900 leading-none">HomeControl</h1>
+                  <span class="text-[11px] text-slate-500 font-medium">Control de horarios y pagos</span>
                 </div>
               </div>
-              <button id="btn-toggle-tablet" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-200">
+              <button id="btn-toggle-tablet" class="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-[11px] font-bold text-slate-700 shadow-2xs">
                 ${state.tabletMode ? "Modo Móvil" : "Modo Tablet"}
               </button>
             </div>
 
-            <div class="glass-card rounded-2xl p-3.5 mb-3">
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Código o enlace de hogar</label>
+            <div class="light-card rounded-2xl p-3.5 mb-3">
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">Código o enlace de hogar</label>
               <div class="flex gap-2">
                 <input id="access-home-code" type="text" value="${escapeHtml(state.homeCode)}" placeholder="Ej: CASA-NORTE"
-                  class="flex-1 rounded-xl bg-slate-900/90 border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white focus:outline-none focus:border-sky-400" />
-                <button id="btn-load-home" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-sky-300">
+                  class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-900 focus:outline-none focus:border-sky-500" />
+                <button id="btn-load-home" class="px-3 py-2 rounded-xl bg-sky-100 hover:bg-sky-200 border border-sky-300 text-xs font-extrabold text-sky-800">
                   Cargar
                 </button>
               </div>
             </div>
 
             <div class="grid grid-cols-2 gap-2.5 mb-3">
-              <button id="choose-role-owner" class="glass-card rounded-2xl p-3.5 text-left border-2 ${state.role === "owner" ? "border-sky-400" : "border-transparent hover:border-slate-600"}">
-                <div class="text-xs font-extrabold text-sky-300">PROPIETARIO</div>
-                <div class="text-[11px] text-slate-400 mt-0.5">${hasMasterPass ? "Entrar o enlazar" : "Crear hogar / Máster"}</div>
-              </button>
-              <button id="choose-role-emp" class="glass-card rounded-2xl p-3.5 text-left border-2 border-transparent hover:border-emerald-400/60">
-                <div class="text-xs font-extrabold text-emerald-300">EMPLEADA</div>
-                <div class="text-[11px] text-slate-400 mt-0.5">${empList.length} disponible${empList.length === 1 ? "" : "s"}</div>
-              </button>
+              <div class="light-card rounded-2xl p-3 border-sky-200">
+                <div class="text-xs font-extrabold text-sky-700">PROPIETARIO</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">${hasMasterPass ? "Entrar o enlazar" : "Crear hogar / Máster"}</div>
+              </div>
+              <div class="light-card rounded-2xl p-3 border-emerald-200">
+                <div class="text-xs font-extrabold text-emerald-700">EMPLEADA</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">${empList.length} disponible${empList.length === 1 ? "" : "s"}</div>
+              </div>
             </div>
 
-            <!-- Panel acceso Propietario -->
-            <div id="owner-auth-box" class="glass-card rounded-2xl p-3.5 mb-3">
-              <div class="text-xs font-bold text-white mb-2">
+            <div class="light-card rounded-2xl p-3.5 mb-3">
+              <div class="text-xs font-extrabold text-slate-800 mb-2">
                 ${hasMasterPass ? "Acceso Propietario / Edición" : "Configurar Hogar Nuevo (Propietario 1 Máster)"}
               </div>
               <input id="owner-pass-input" type="password" placeholder="${hasMasterPass ? "Contraseña máster del hogar" : "Crea una contraseña máster"}"
-                class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2.5 focus:outline-none focus:border-sky-400" />
+                class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 mb-2.5 focus:outline-none focus:border-sky-500" />
               <div class="flex items-center justify-between gap-2">
-                <label class="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
-                  <input id="owner-master-check" type="checkbox" checked class="rounded accent-sky-400" />
+                <label class="flex items-center gap-1.5 text-[11px] text-slate-700 font-semibold cursor-pointer">
+                  <input id="owner-master-check" type="checkbox" checked class="rounded accent-sky-600" />
                   <span>Propietario 1 (Máster)</span>
                 </label>
-                <button id="btn-enter-owner" class="px-4 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">
+                <button id="btn-enter-owner" class="px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold shadow-xs">
                   ${hasMasterPass ? "Entrar" : "Crear y Entrar"}
                 </button>
               </div>
-              <div id="owner-auth-err" class="text-[11px] text-rose-400 mt-1.5 hidden"></div>
+              <div id="owner-auth-err" class="text-[11px] text-rose-600 font-semibold mt-1.5 hidden"></div>
             </div>
 
-            <!-- Panel acceso Empleada -->
-            <div class="glass-card rounded-2xl p-3.5">
-              <div class="text-xs font-bold text-emerald-300 mb-2">Acceso Empleada</div>
+            <div class="light-card rounded-2xl p-3.5">
+              <div class="text-xs font-extrabold text-emerald-700 mb-2">Acceso Empleada</div>
               ${empList.length === 0 ? `
-                <div class="text-[11px] text-slate-400">No hay empleadas registradas todavía en este hogar.</div>
+                <div class="text-[11px] text-slate-500">No hay empleadas registradas todavía en este hogar.</div>
               ` : `
-                <select id="emp-select" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2">
+                <select id="emp-select" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 font-semibold mb-2">
                   ${empList.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("")}
                 </select>
                 <input id="emp-pass-input" type="password" placeholder="Contraseña de acceso"
-                  class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2.5" />
-                <button id="btn-enter-emp" class="w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">
+                  class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 mb-2.5" />
+                <button id="btn-enter-emp" class="w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold shadow-xs">
                   Entrar a mi espacio
                 </button>
-                <div id="emp-auth-err" class="text-[11px] text-rose-400 mt-1.5 hidden"></div>
+                <div id="emp-auth-err" class="text-[11px] text-rose-600 font-semibold mt-1.5 hidden"></div>
               `}
             </div>
           </div>
 
-          <div class="text-center text-[10px] text-slate-500">
+          <div class="text-center text-[10px] text-slate-500 font-medium">
             Sincronización Firebase RTDB · Respaldo local activo · Sin datos de ejemplo
           </div>
         </div>
@@ -910,7 +929,7 @@
     }
 
     // =========================================================================
-    // PANTALLA EMPLEADA (SIN SCROLL INNECESARIO, SIN HORAS NI EUROS EN FICHA)
+    // PANTALLA EMPLEADA (CLARA, SIN SCROLL INNECESARIO, SIN HORAS NI EUROS)
     // =========================================================================
     function renderEmployeeScreen(emp) {
       const openShift = getOpenShift(emp.id);
@@ -927,38 +946,35 @@
 
       return `
         <div class="flex-1 flex flex-col justify-between p-2.5 gap-2">
-          <!-- Cabecera compacta sin horas ni euros por hora -->
-          <header class="glass-card rounded-2xl px-3 py-2 flex items-center justify-between">
+          <header class="light-card rounded-2xl px-3 py-2 flex items-center justify-between">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-400" : "bg-amber-400"} shrink-0"></span>
-              <span class="text-sm font-extrabold text-white truncate">${escapeHtml(emp.name)}</span>
+              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"} shrink-0"></span>
+              <span class="text-sm font-extrabold text-slate-900 truncate">${escapeHtml(emp.name)}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
-              <button id="emp-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-200">
+              <button id="emp-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
                 ${state.tabletMode ? "Móvil" : "Tablet"}
               </button>
-              <button id="emp-logout" class="px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[10px] font-bold text-rose-300">
+              <button id="emp-logout" class="px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-[10px] font-bold text-rose-700">
                 Salir
               </button>
             </div>
           </header>
 
-          <!-- Contenido según pestaña activa -->
           <main class="flex-1 flex flex-col gap-2">
             ${state.empTab === "work" ? renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) : ""}
             ${state.empTab === "calendar" ? renderCalendarView(emp.id, state.calMonth, false) : ""}
             ${state.empTab === "chat" ? renderChatView(emp.id, "employee", emp.name) : ""}
           </main>
 
-          <!-- Navegación inferior fija -->
-          <nav class="grid grid-cols-3 gap-1.5 glass-card rounded-2xl p-1.5">
-            <button data-emptab="work" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "work" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+          <nav class="grid grid-cols-3 gap-1.5 light-card rounded-2xl p-1.5">
+            <button data-emptab="work" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "work" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Fichar / Tareas
             </button>
-            <button data-emptab="calendar" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "calendar" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+            <button data-emptab="calendar" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "calendar" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Calendario
             </button>
-            <button data-emptab="chat" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${isBlinking ? "chat-alert-blink text-amber-200" : state.empTab === "chat" ? "bg-amber-400 text-slate-950" : "text-slate-300"}">
+            <button data-emptab="chat" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${isBlinking ? "chat-alert-blink text-amber-900" : state.empTab === "chat" ? "bg-amber-500 text-slate-950" : "text-slate-600 bg-slate-50"}">
               Chat ${isBlinking ? "🔔" : ""}
             </button>
           </nav>
@@ -969,47 +985,45 @@
     function renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) {
       return `
         <div class="split-pane flex-1 flex flex-col gap-2">
-          <!-- Bloque Entrada / Salida / Cronómetro -->
-          <section class="glass-card rounded-2xl p-3 flex flex-col justify-between gap-2.5">
+          <section class="light-card rounded-2xl p-3 flex flex-col justify-between gap-2.5">
             <div class="flex items-center justify-between">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 ${openShift ? "Turno en curso" : "Cronómetro hoy"}
               </span>
-              <span class="text-[11px] font-semibold ${openShift ? "text-emerald-300" : "text-slate-400"}">
+              <span class="text-[11px] font-bold ${openShift ? "text-emerald-700" : "text-slate-500"}">
                 ${openShift ? `Entrada ${formatTimeHM(openShift.startTs)}` : "Sin entrada activa"}
               </span>
             </div>
 
-            <div id="emp-live-timer" class="text-3xl font-extrabold tracking-tight text-center py-1 text-white">
+            <div id="emp-live-timer" class="text-3xl font-extrabold tracking-tight text-center py-1 text-slate-900">
               ${elapsedStr}
             </div>
 
             <div class="grid grid-cols-2 gap-2">
-              <button id="btn-clock-in" ${openShift ? "disabled" : ""}
-                class="py-3 rounded-xl text-xs font-extrabold transition ${openShift ? "bg-slate-800/50 text-slate-600 cursor-not-allowed" : "bg-emerald-400 text-slate-950 active:scale-[0.98]"}">
+              <button id="btn-clock-in" type="button" ${openShift ? "disabled" : ""}
+                class="py-3 rounded-xl text-xs font-extrabold transition ${openShift ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-[0.98]"}">
                 ENTRADA
               </button>
-              <button id="btn-clock-out" ${!openShift ? "disabled" : ""}
-                class="py-3 rounded-xl text-xs font-extrabold transition ${!openShift ? "bg-slate-800/60 text-slate-500 border border-slate-700/60 cursor-not-allowed" : "bg-amber-400 text-slate-950 active:scale-[0.98]"}">
+              <button id="btn-clock-out" type="button" ${!openShift ? "disabled" : ""}
+                class="py-3 rounded-xl text-xs font-extrabold transition ${!openShift ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs active:scale-[0.98]"}">
                 SALIDA
               </button>
             </div>
           </section>
 
-          <!-- Bloque Tareas del día -->
-          <section class="glass-card rounded-2xl p-3 flex-1 flex flex-col">
+          <section class="light-card rounded-2xl p-3 flex-1 flex flex-col">
             <div class="flex items-center justify-between mb-1.5">
-              <span class="text-xs font-extrabold text-sky-300">Tareas de hoy</span>
-              <span class="text-[11px] text-slate-400">${todayTasks.filter((t) => t.done).length}/${todayTasks.length}</span>
+              <span class="text-xs font-extrabold text-sky-800">Tareas de hoy</span>
+              <span class="text-[11px] font-bold text-slate-500">${todayTasks.filter((t) => t.done).length}/${todayTasks.length}</span>
             </div>
             ${todayTasks.length === 0 ? `
-              <div class="flex-1 flex items-center justify-center text-xs text-slate-500 py-3">Sin tareas especiales hoy</div>
+              <div class="flex-1 flex items-center justify-center text-xs text-slate-400 py-3">Sin tareas especiales hoy</div>
             ` : `
               <div class="space-y-1.5 max-h-44 overflow-y-auto no-scrollbar">
                 ${todayTasks.map((t) => `
-                  <label class="flex items-center gap-2.5 p-2 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer">
-                    <input type="checkbox" data-taskid="${t.id}" ${t.done ? "checked" : ""} class="emp-task-check w-4 h-4 rounded accent-emerald-400" />
-                    <span class="text-xs ${t.done ? "line-through text-slate-500" : "text-slate-100"}">${escapeHtml(t.title)}</span>
+                  <label class="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                    <input type="checkbox" data-taskid="${t.id}" ${t.done ? "checked" : ""} class="emp-task-check w-4 h-4 rounded accent-emerald-600" />
+                    <span class="text-xs font-medium ${t.done ? "line-through text-slate-400" : "text-slate-800"}">${escapeHtml(t.title)}</span>
                   </label>
                 `).join("")}
               </div>
@@ -1041,11 +1055,17 @@
 
       const btnIn = document.getElementById("btn-clock-in");
       if (btnIn && !btnIn.disabled) {
-        btnIn.onclick = () => clockInEmployee(emp.id);
+        btnIn.addEventListener("click", (e) => {
+          e.preventDefault();
+          clockInEmployee(emp.id);
+        });
       }
       const btnOut = document.getElementById("btn-clock-out");
       if (btnOut && !btnOut.disabled) {
-        btnOut.onclick = () => promptClockOutConfirm(emp.id);
+        btnOut.addEventListener("click", (e) => {
+          e.preventDefault();
+          promptClockOutConfirm(emp.id);
+        });
       }
 
       document.querySelectorAll(".emp-task-check").forEach((chk) => {
@@ -1053,8 +1073,9 @@
           const t = state.data.tasks[chk.dataset.taskid];
           if (!t) return;
           t.done = chk.checked;
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       });
 
@@ -1064,7 +1085,7 @@
     }
 
     // =========================================================================
-    // PANTALLA PROPIETARIO (SIN BOTÓN FICHAR ENTRADA/SALIDA)
+    // PANTALLA PROPIETARIO (CLARA, SIN BOTÓN FICHAR ENTRADA/SALIDA)
     // =========================================================================
     function renderOwnerScreen() {
       const employees = Object.values(state.data.employees || {});
@@ -1083,44 +1104,43 @@
 
       return `
         <div class="flex-1 flex flex-col p-2.5 gap-2">
-          <header class="glass-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+          <header class="light-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-400" : "bg-amber-400"} shrink-0"></span>
+              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"} shrink-0"></span>
               <div class="truncate">
-                <span class="text-xs font-extrabold text-white">${state.isMaster ? "Propietario Máster" : "Propietario"}</span>
-                <span class="text-[10px] text-sky-300 font-bold ml-1">${escapeHtml(state.homeCode)}</span>
+                <span class="text-xs font-extrabold text-slate-900">${state.isMaster ? "Propietario Máster" : "Propietario"}</span>
+                <span class="text-[10px] text-sky-700 font-extrabold ml-1">${escapeHtml(state.homeCode)}</span>
               </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-              <button id="owner-share-btn" class="px-2 py-1 rounded-lg bg-sky-400/15 border border-sky-400/35 text-[10px] font-bold text-sky-300">Enlace</button>
-              <button id="owner-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-200">
+              <button id="owner-share-btn" class="px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 text-[10px] font-bold text-sky-700">Enlace</button>
+              <button id="owner-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
                 ${state.tabletMode ? "Móvil" : "Tablet"}
               </button>
-              <button id="owner-logout" class="px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[10px] font-bold text-rose-300">Salir</button>
+              <button id="owner-logout" class="px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-[10px] font-bold text-rose-700">Salir</button>
             </div>
           </header>
 
           ${excessShifts.length > 0 ? `
-            <div class="rounded-xl bg-amber-500/20 border border-amber-400/60 px-3 py-2 text-[11px] text-amber-200 font-semibold">
-              ⚠️ Aviso (+1h sobre ficha): hay ${excessShifts.length} turno(s) que superan en más de 1 hora las horas diarias previstas. Revísalos y ajústalos.
+            <div class="rounded-xl bg-amber-100 border border-amber-400 px-3 py-2 text-[11px] text-amber-950 font-bold">
+              ⚠️ Aviso (+1h sobre ficha): hay ${excessShifts.length} turno(s) que superan en más de 1 hora las horas diarias previstas.
             </div>
           ` : ""}
 
-          <!-- Pestañas de gestión -->
-          <div class="grid grid-cols-5 gap-1 glass-card rounded-2xl p-1 text-[10px] font-extrabold">
-            <button data-otab="shifts" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "shifts" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+          <div class="grid grid-cols-5 gap-1 light-card rounded-2xl p-1 text-[10px] font-extrabold">
+            <button data-otab="shifts" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "shifts" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Turnos ${pendingShifts.length ? `(${pendingShifts.length})` : ""}
             </button>
-            <button data-otab="employees" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "employees" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+            <button data-otab="employees" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "employees" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Empleadas
             </button>
-            <button data-otab="tasks" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "tasks" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+            <button data-otab="tasks" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "tasks" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Tareas
             </button>
-            <button data-otab="closures" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "closures" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+            <button data-otab="closures" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "closures" ? "bg-sky-600 text-white" : "text-slate-600 bg-slate-50"}">
               Mes / Pago
             </button>
-            <button data-otab="chat" class="o-tab py-1.5 rounded-xl ${anyChatBlink ? "chat-alert-blink text-amber-200" : state.ownerSubTab === "chat" ? "bg-amber-400 text-slate-950" : "text-slate-300"}">
+            <button data-otab="chat" class="o-tab py-1.5 rounded-xl ${anyChatBlink ? "chat-alert-blink text-amber-900" : state.ownerSubTab === "chat" ? "bg-amber-500 text-slate-950" : "text-slate-600 bg-slate-50"}">
               Chat ${anyChatBlink ? "🔔" : ""}
             </button>
           </div>
@@ -1144,50 +1164,48 @@
 
       return `
         <div class="split-pane flex flex-col gap-2">
-          <!-- Columna izquierda: Pendientes de confirmar + Historial editable -->
-          <section class="glass-card rounded-2xl p-3 space-y-2">
-            <div class="text-xs font-extrabold text-amber-300">Pendientes de confirmar (${pendingShifts.length})</div>
+          <section class="light-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-amber-800">Pendientes de confirmar (${pendingShifts.length})</div>
             ${pendingShifts.length === 0 ? `
-              <div class="text-xs text-slate-400 py-1">No hay turnos pendientes de confirmar.</div>
+              <div class="text-xs text-slate-500 py-1">No hay turnos pendientes de confirmar.</div>
             ` : pendingShifts.map((s) => {
               const emp = state.data.employees[s.empId];
               const dur = msToHoursMinutes((s.endTs || Date.now()) - s.startTs);
               const rate = getRateForDate(emp, s.date);
               const eur = formatExactEuro((dur.totalMinutes / 60) * rate);
               return `
-                <div class="rounded-xl bg-amber-500/10 border border-amber-400/40 p-2.5 flex items-center justify-between gap-2">
+                <div class="rounded-xl bg-amber-50 border border-amber-300 p-2.5 flex items-center justify-between gap-2">
                   <div class="min-w-0">
-                    <div class="text-xs font-bold text-white truncate">${escapeHtml(emp?.name || "")} · ${s.date}</div>
-                    <div class="text-[11px] text-amber-200">${formatTimeHM(s.startTs)} – ${formatTimeHM(s.endTs)} (${dur.text} · ${eur})</div>
+                    <div class="text-xs font-extrabold text-slate-900 truncate">${escapeHtml(emp?.name || "")} · ${s.date}</div>
+                    <div class="text-[11px] text-amber-900 font-semibold">${formatTimeHM(s.startTs)} – ${formatTimeHM(s.endTs)} (${dur.text} · ${eur})</div>
                   </div>
                   <div class="flex gap-1.5 shrink-0">
-                    <button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1.5 rounded-lg bg-slate-800 text-[11px] font-bold text-sky-300">Ajustar</button>
-                    <button data-confirmshift="${s.id}" class="btn-confirm-shift px-2.5 py-1.5 rounded-lg bg-emerald-400 text-slate-950 text-[11px] font-extrabold">Confirmar</button>
+                    <button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-[11px] font-bold text-sky-700">Ajustar</button>
+                    <button data-confirmshift="${s.id}" class="btn-confirm-shift px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-extrabold">Confirmar</button>
                   </div>
                 </div>
               `;
             }).join("")}
 
-            <div class="text-xs font-extrabold text-sky-300 pt-2 border-t border-slate-800">Turnos recientes (editar / confirmar)</div>
+            <div class="text-xs font-extrabold text-sky-800 pt-2 border-t border-slate-200">Turnos recientes (editar / confirmar)</div>
             <div class="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
               ${allShifts.slice(0, 12).map((s) => {
-                const emp = state.data.employees[s.empId];
                 const dur = msToHoursMinutes(getShiftDurationMs(s));
                 const badgeClass =
                   s.status === "confirmed"
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                     : s.status === "pending"
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-sky-500/20 text-sky-300 border-sky-500/40";
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : "bg-sky-100 text-sky-800 border-sky-300";
                 return `
-                  <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center justify-between gap-2">
+                  <div class="rounded-xl bg-slate-50 border border-slate-200 p-2 flex items-center justify-between gap-2">
                     <div class="min-w-0">
-                      <div class="text-[11px] font-bold text-white">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"} (${dur.text})</div>
-                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">${s.status.toUpperCase()}</span>
+                      <div class="text-[11px] font-bold text-slate-900">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"} (${dur.text})</div>
+                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${badgeClass}">${s.status.toUpperCase()}</span>
                     </div>
                     <div class="flex gap-1 shrink-0">
-                      ${s.status === "pending" ? `<button data-confirmshift="${s.id}" class="btn-confirm-shift px-2 py-1 rounded-lg bg-emerald-400 text-slate-950 text-[10px] font-extrabold">Confirmar</button>` : ""}
-                      ${s.status !== "open" ? `<button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1 rounded-lg bg-slate-800 text-[10px] font-bold text-sky-300">Editar</button>` : ""}
+                      ${s.status === "pending" ? `<button data-confirmshift="${s.id}" class="btn-confirm-shift px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold">Confirmar</button>` : ""}
+                      ${s.status !== "open" ? `<button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1 rounded-lg bg-white border border-slate-300 text-[10px] font-bold text-sky-700">Editar</button>` : ""}
                     </div>
                   </div>
                 `;
@@ -1195,18 +1213,17 @@
             </div>
           </section>
 
-          <!-- Columna derecha: Calendario mensual completo por empleada -->
           <section class="space-y-2">
             ${employees.length > 0 ? `
-              <div class="glass-card rounded-2xl p-2 flex items-center gap-2">
-                <span class="text-[11px] font-bold text-slate-400">Empleada:</span>
-                <select id="owner-cal-emp" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white">
+              <div class="light-card rounded-2xl p-2 flex items-center gap-2">
+                <span class="text-[11px] font-bold text-slate-600">Empleada:</span>
+                <select id="owner-cal-emp" class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 font-semibold">
                   ${employees.map((e) => `<option value="${e.id}" ${e.id === calEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
                 </select>
               </div>
               ${calEmpId ? renderCalendarView(calEmpId, state.ownerCalMonth, true) : ""}
             ` : `
-              <div class="glass-card rounded-2xl p-4 text-center text-xs text-slate-400">
+              <div class="light-card rounded-2xl p-4 text-center text-xs text-slate-500">
                 Añade una empleada en la pestaña <strong>Empleadas</strong> para ver su calendario.
               </div>
             `}
@@ -1218,53 +1235,51 @@
     function renderOwnerEmployeesTab(employees) {
       return `
         <div class="split-pane flex flex-col gap-2">
-          <!-- Alta de empleada -->
-          <section class="glass-card rounded-2xl p-3 space-y-2">
-            <div class="text-xs font-extrabold text-sky-300">Nueva empleada</div>
-            <input id="new-emp-name" type="text" placeholder="Nombre (ej: Elena)" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
-            <input id="new-emp-pass" type="text" placeholder="Contraseña (por defecto nombre en minúsculas)" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
+          <section class="light-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-sky-800">Nueva empleada</div>
+            <input id="new-emp-name" type="text" placeholder="Nombre (ej: Elena)" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+            <input id="new-emp-pass" type="text" placeholder="Contraseña (por defecto nombre en minúsculas)" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[10px] text-slate-400 mb-0.5">Tarifa €/h (defecto 10)</label>
-                <input id="new-emp-rate" type="number" step="0.01" value="10" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                <label class="block text-[10px] text-slate-600 font-semibold mb-0.5">Tarifa €/h (defecto 10)</label>
+                <input id="new-emp-rate" type="number" step="0.01" value="10" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
               </div>
               <div>
-                <label class="block text-[10px] text-slate-400 mb-0.5">Horas diarias ficha</label>
-                <input id="new-emp-hours" type="number" step="0.5" value="4" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                <label class="block text-[10px] text-slate-600 font-semibold mb-0.5">Horas diarias ficha</label>
+                <input id="new-emp-hours" type="number" step="0.5" value="4" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
               </div>
             </div>
-            <button id="btn-add-emp" class="w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">Añadir empleada</button>
+            <button id="btn-add-emp" class="w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Añadir empleada</button>
           </section>
 
-          <!-- Lista y edición de empleadas -->
-          <section class="glass-card rounded-2xl p-3 space-y-2">
-            <div class="text-xs font-extrabold text-white">Empleadas registradas (${employees.length})</div>
-            ${employees.length === 0 ? `<div class="text-xs text-slate-400">Sin empleadas todavía.</div>` : employees.map((e) => {
+          <section class="light-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-slate-900">Empleadas registradas (${employees.length})</div>
+            ${employees.length === 0 ? `<div class="text-xs text-slate-500">Sin empleadas todavía.</div>` : employees.map((e) => {
               const currentRate = getRateForDate(e, toDateStr(Date.now()));
               return `
-                <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5 space-y-2">
+                <div class="rounded-xl bg-slate-50 border border-slate-200 p-2.5 space-y-2">
                   <div class="flex items-center justify-between">
                     <div>
-                      <div class="text-xs font-extrabold text-white">${escapeHtml(e.name)}</div>
-                      <div class="text-[11px] text-slate-400">Tarifa actual: <strong class="text-emerald-300">${formatExactEuro(currentRate)}/h</strong> · Ficha: <strong class="text-sky-300">${e.dailyHours}h/día</strong></div>
+                      <div class="text-xs font-extrabold text-slate-900">${escapeHtml(e.name)}</div>
+                      <div class="text-[11px] text-slate-600">Tarifa actual: <strong class="text-emerald-700">${formatExactEuro(currentRate)}/h</strong> · Ficha: <strong class="text-sky-700">${e.dailyHours}h/día</strong></div>
                     </div>
-                    <button data-delemp="${e.id}" class="btn-del-emp px-2 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-[10px] font-bold">Eliminar</button>
+                    <button data-delemp="${e.id}" class="btn-del-emp px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">Eliminar</button>
                   </div>
-                  <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800">
-                    <input id="rate-val-${e.id}" type="number" step="0.01" value="${currentRate}" placeholder="Nueva €/h" class="rounded-lg bg-slate-950 border border-slate-700 px-2 py-1 text-[11px] text-white" />
-                    <input id="rate-date-${e.id}" type="date" value="${toDateStr(Date.now())}" class="rounded-lg bg-slate-950 border border-slate-700 px-1.5 py-1 text-[11px] text-white" />
-                    <button data-saverate="${e.id}" class="btn-save-rate rounded-lg bg-sky-400 text-slate-950 text-[10px] font-extrabold">Aplicar tarifa</button>
+                  <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
+                    <input id="rate-val-${e.id}" type="number" step="0.01" value="${currentRate}" class="rounded-lg bg-white border border-slate-300 px-2 py-1 text-[11px] text-slate-900" />
+                    <input id="rate-date-${e.id}" type="date" value="${toDateStr(Date.now())}" class="rounded-lg bg-white border border-slate-300 px-1.5 py-1 text-[11px] text-slate-900" />
+                    <button data-saverate="${e.id}" class="btn-save-rate rounded-lg bg-sky-600 text-white text-[10px] font-extrabold">Aplicar tarifa</button>
                   </div>
                 </div>
               `;
             }).join("")}
 
             ${state.isMaster ? `
-              <div class="pt-2 border-t border-slate-800 space-y-1.5">
-                <div class="text-[11px] font-bold text-slate-300">Cambiar contraseña máster</div>
+              <div class="pt-2 border-t border-slate-200 space-y-1.5">
+                <div class="text-[11px] font-bold text-slate-700">Cambiar contraseña máster</div>
                 <div class="flex gap-1.5">
-                  <input id="new-master-pass" type="password" placeholder="Nueva clave máster" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
-                  <button id="btn-change-master" class="px-3 py-1.5 rounded-xl bg-slate-700 text-xs font-bold text-white">Guardar</button>
+                  <input id="new-master-pass" type="password" placeholder="Nueva clave máster" class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
+                  <button id="btn-change-master" class="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold">Guardar</button>
                 </div>
               </div>
             ` : ""}
@@ -1277,30 +1292,30 @@
       const tasks = Object.values(state.data.tasks || {}).sort((a, b) => b.createdAt - a.createdAt);
       return `
         <div class="split-pane flex flex-col gap-2">
-          <section class="glass-card rounded-2xl p-3 space-y-2">
-            <div class="text-xs font-extrabold text-sky-300">Asignar tarea especial</div>
-            <select id="task-emp-select" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white">
+          <section class="light-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-sky-800">Asignar tarea especial</div>
+            <select id="task-emp-select" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-2 text-xs text-slate-900 font-semibold">
               ${employees.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("")}
             </select>
-            <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
+            <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
             <div class="flex items-center gap-2">
-              <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
-              <button id="btn-task-today" class="px-2.5 py-1.5 rounded-xl bg-slate-800 text-[11px] font-bold text-sky-300">Hoy</button>
+              <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
+              <button id="btn-task-today" type="button" class="px-2.5 py-1.5 rounded-xl bg-sky-100 text-[11px] font-extrabold text-sky-800">Hoy</button>
             </div>
-            <button id="btn-add-task" class="w-full py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Asignar tarea</button>
+            <button id="btn-add-task" type="button" class="w-full py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold">Asignar tarea</button>
           </section>
 
-          <section class="glass-card rounded-2xl p-3 space-y-1.5">
-            <div class="text-xs font-extrabold text-white mb-1">Tareas asignadas</div>
-            ${tasks.length === 0 ? `<div class="text-xs text-slate-400">Sin tareas creadas.</div>` : tasks.map((t) => {
+          <section class="light-card rounded-2xl p-3 space-y-1.5">
+            <div class="text-xs font-extrabold text-slate-900 mb-1">Tareas asignadas</div>
+            ${tasks.length === 0 ? `<div class="text-xs text-slate-500">Sin tareas creadas.</div>` : tasks.map((t) => {
               const emp = state.data.employees[t.empId];
               return `
-                <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center justify-between gap-2">
+                <div class="rounded-xl bg-slate-50 border border-slate-200 p-2 flex items-center justify-between gap-2">
                   <div class="min-w-0">
-                    <div class="text-xs ${t.done ? "line-through text-slate-500" : "text-white font-semibold"} truncate">${escapeHtml(t.title)}</div>
-                    <div class="text-[10px] text-slate-400">${escapeHtml(emp?.name || "")} · ${t.date} · ${t.done ? "Hecha" : "Pendiente"}</div>
+                    <div class="text-xs ${t.done ? "line-through text-slate-400" : "text-slate-900 font-bold"} truncate">${escapeHtml(t.title)}</div>
+                    <div class="text-[10px] text-slate-500">${escapeHtml(emp?.name || "")} · ${t.date} · ${t.done ? "Hecha" : "Pendiente"}</div>
                   </div>
-                  <button data-deltask="${t.id}" class="btn-del-task px-2 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-[10px] font-bold">Borrar</button>
+                  <button data-deltask="${t.id}" class="btn-del-task px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">Borrar</button>
                 </div>
               `;
             }).join("")}
@@ -1312,41 +1327,41 @@
     function renderOwnerClosuresTab(employees) {
       const monthKey = state.ownerCalMonth || currentYearMonth();
       return `
-        <section class="glass-card rounded-2xl p-3 space-y-2.5">
+        <section class="light-card rounded-2xl p-3 space-y-2.5">
           <div class="flex items-center justify-between">
-            <div class="text-xs font-extrabold text-emerald-300">Cierre y registro de pagos</div>
-            <input id="closure-month-input" type="month" value="${monthKey}" class="rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1 text-xs text-white" />
+            <div class="text-xs font-extrabold text-emerald-800">Cierre y registro de pagos</div>
+            <input id="closure-month-input" type="month" value="${monthKey}" class="rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1 text-xs text-slate-900 font-semibold" />
           </div>
-          ${employees.length === 0 ? `<div class="text-xs text-slate-400">Sin empleadas para cerrar mes.</div>` : employees.map((emp) => {
+          ${employees.length === 0 ? `<div class="text-xs text-slate-500">Sin empleadas para cerrar mes.</div>` : employees.map((emp) => {
             const sum = getMonthSummary(emp.id, monthKey);
             const closed = sum.closure;
             return `
-              <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2">
+              <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-2">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-white">${escapeHtml(emp.name)}</span>
-                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${closed ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-300"}">
+                  <span class="text-xs font-extrabold text-slate-900">${escapeHtml(emp.name)}</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${closed ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}">
                     ${closed ? `Cerrado (${closed.paidDate})` : "Abierto"}
                   </span>
                 </div>
-                <div class="grid grid-cols-3 gap-1.5 text-center bg-slate-950/70 rounded-xl p-2">
+                <div class="grid grid-cols-3 gap-1.5 text-center bg-white border border-slate-200 rounded-xl p-2">
                   <div>
-                    <div class="text-[10px] text-slate-400">Días</div>
-                    <div class="text-xs font-extrabold text-white">${sum.daysCount}</div>
+                    <div class="text-[10px] text-slate-500">Días</div>
+                    <div class="text-xs font-extrabold text-slate-900">${sum.daysCount}</div>
                   </div>
                   <div>
-                    <div class="text-[10px] text-slate-400">Confirmado</div>
-                    <div class="text-xs font-extrabold text-emerald-300">${msToHoursMinutes(sum.confirmedMs).text}</div>
+                    <div class="text-[10px] text-slate-500">Confirmado</div>
+                    <div class="text-xs font-extrabold text-emerald-700">${msToHoursMinutes(sum.confirmedMs).text}</div>
                   </div>
                   <div>
-                    <div class="text-[10px] text-slate-400">Importe exacto</div>
-                    <div class="text-xs font-extrabold text-sky-300">${formatExactEuro(sum.confirmedAmount)}</div>
+                    <div class="text-[10px] text-slate-500">Importe exacto</div>
+                    <div class="text-xs font-extrabold text-sky-700">${formatExactEuro(sum.confirmedAmount)}</div>
                   </div>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
-                  <input id="pay-amt-${emp.id}" type="number" step="0.01" value="${Number(sum.confirmedAmount.toFixed(2))}" placeholder="Importe abonado €" class="rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
-                  <input id="pay-date-${emp.id}" type="date" value="${closed?.paidDate || toDateStr(Date.now())}" class="rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                  <input id="pay-amt-${emp.id}" type="number" step="0.01" value="${Number(sum.confirmedAmount.toFixed(2))}" class="rounded-xl bg-white border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
+                  <input id="pay-date-${emp.id}" type="date" value="${closed?.paidDate || toDateStr(Date.now())}" class="rounded-xl bg-white border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
                 </div>
-                <button data-closeemp="${emp.id}" class="btn-close-month w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">
+                <button data-closeemp="${emp.id}" class="btn-close-month w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">
                   ${closed ? "Actualizar cierre y pago" : "Cerrar mes y guardar pago"}
                 </button>
               </div>
@@ -1366,14 +1381,14 @@
                 const blink = Boolean(state.blinkingChat[e.id]);
                 const active = e.id === selectedId;
                 return `
-                  <button data-chatemp="${e.id}" class="btn-select-chatemp px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${blink ? "chat-alert-blink text-amber-200" : active ? "bg-amber-400 text-slate-950" : "bg-slate-800 text-slate-300"}">
+                  <button data-chatemp="${e.id}" class="btn-select-chatemp px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${blink ? "chat-alert-blink text-amber-900" : active ? "bg-amber-500 text-slate-950" : "bg-white border border-slate-200 text-slate-700"}">
                     ${escapeHtml(e.name)} ${blink ? "🔔" : ""}
                   </button>
                 `;
               }).join("")}
             </div>
             ${selectedId ? renderChatView(selectedId, "owner", state.isMaster ? "Propietario Máster" : "Propietario") : ""}
-          ` : `<div class="glass-card rounded-2xl p-4 text-xs text-slate-400">Crea una empleada para usar su chat.</div>`}
+          ` : `<div class="light-card rounded-2xl p-4 text-xs text-slate-500">Crea una empleada para usar su chat.</div>`}
         </div>
       `;
     }
@@ -1401,7 +1416,6 @@
         };
       });
 
-      // Confirmar / editar turnos
       document.querySelectorAll(".btn-confirm-shift").forEach((btn) => {
         btn.onclick = () => confirmShift(btn.dataset.confirmshift);
       });
@@ -1418,7 +1432,6 @@
         bindCalendarControls(calEmpSel.value, true);
       }
 
-      // Alta empleada
       const btnAddEmp = document.getElementById("btn-add-emp");
       if (btnAddEmp) {
         btnAddEmp.onclick = async () => {
@@ -1440,12 +1453,12 @@
           };
           if (!state.ownerChatEmpId) state.ownerChatEmpId = id;
           if (!state.ownerCalEmpId) state.ownerCalEmpId = id;
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       }
 
-      // Aplicar tarifa con fecha de inicio
       document.querySelectorAll(".btn-save-rate").forEach((btn) => {
         btn.onclick = async () => {
           const empId = btn.dataset.saverate;
@@ -1455,36 +1468,36 @@
           const effectiveDate = document.getElementById(`rate-date-${empId}`).value || toDateStr(Date.now());
           emp.rateHistory = Array.isArray(emp.rateHistory) ? emp.rateHistory : [];
           emp.rateHistory.push({ effectiveDate, rate });
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       });
 
-      // Eliminar empleada
       document.querySelectorAll(".btn-del-emp").forEach((btn) => {
         btn.onclick = async () => {
           const id = btn.dataset.delemp;
           delete state.data.employees[id];
           if (state.ownerChatEmpId === id) state.ownerChatEmpId = null;
           if (state.ownerCalEmpId === id) state.ownerCalEmpId = null;
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       });
 
-      // Cambiar contraseña máster
       const btnMaster = document.getElementById("btn-change-master");
       if (btnMaster) {
         btnMaster.onclick = async () => {
           const val = document.getElementById("new-master-pass").value;
           if (!val) return;
           state.data.meta.masterPasswordHash = btoa(unescape(encodeURIComponent(val)));
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       }
 
-      // Tareas especiales
       const btnToday = document.getElementById("btn-task-today");
       if (btnToday) {
         btnToday.onclick = () => {
@@ -1500,19 +1513,20 @@
           if (!empId || !title) return;
           const taskId = `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
           state.data.tasks[taskId] = { id: taskId, empId, date, title, done: false, createdAt: Date.now() };
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       }
       document.querySelectorAll(".btn-del-task").forEach((btn) => {
         btn.onclick = async () => {
           delete state.data.tasks[btn.dataset.deltask];
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       });
 
-      // Cierre mensual y pago
       const closureMonthInput = document.getElementById("closure-month-input");
       if (closureMonthInput) {
         closureMonthInput.onchange = () => {
@@ -1533,12 +1547,12 @@
             paidDate,
             closedAt: Date.now()
           };
-          await pushToFirebase(state.homeCode, state.data);
+          saveLocal(state.homeCode, state.data);
           render();
+          await pushToFirebase(state.homeCode, state.data);
         };
       });
 
-      // Chat selector
       document.querySelectorAll(".btn-select-chatemp").forEach((btn) => {
         btn.onclick = () => {
           state.ownerChatEmpId = btn.dataset.chatemp;
@@ -1562,30 +1576,29 @@
       const lastDay = new Date(year, monthIdx + 1, 0);
       const daysInMonth = lastDay.getDate();
 
-      // Lunes = 0 .. Domingo = 6
       const startOffset = (firstDay.getDay() + 6) % 7;
       const summary = getMonthSummary(empId, `${year}-${pad2(monthIdx + 1)}`);
 
       const cells = [];
       for (let i = 0; i < startOffset; i++) {
-        cells.push(`<div class="h-9 rounded-lg bg-slate-950/30"></div>`);
+        cells.push(`<div class="h-9 rounded-lg bg-slate-100/70"></div>`);
       }
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${pad2(monthIdx + 1)}-${pad2(day)}`;
         const info = getDayStatusSummary(empId, dateStr);
-        let bgClass = "bg-slate-900/70 text-slate-300 border-slate-800";
+        let bgClass = "bg-slate-50 text-slate-700 border-slate-200";
         if (info.state === "confirmed") {
-          bgClass = "bg-emerald-500/25 text-emerald-200 border-emerald-400/70";
+          bgClass = "bg-emerald-100 text-emerald-900 border-emerald-400";
         } else if (info.state === "pending") {
-          bgClass = "bg-amber-400/25 text-amber-200 border-amber-400/80";
+          bgClass = "bg-amber-100 text-amber-900 border-amber-400";
         } else if (info.state === "open") {
-          bgClass = "bg-sky-400/25 text-sky-200 border-sky-400/80";
+          bgClass = "bg-sky-100 text-sky-900 border-sky-400";
         }
 
         const hm = info.totalMs > 0 ? msToHoursMinutes(info.totalMs) : null;
         cells.push(`
-          <button data-caldate="${dateStr}" class="cal-day-btn h-9 rounded-lg border ${bgClass} flex flex-col items-center justify-center leading-none">
+          <button data-caldate="${dateStr}" type="button" class="cal-day-btn h-9 rounded-lg border ${bgClass} flex flex-col items-center justify-center leading-none">
             <span class="text-[11px] font-extrabold">${day}</span>
             ${hm ? `<span class="text-[8px] font-bold opacity-90 mt-0.5">${hm.hours}h${hm.minutes ? `${hm.minutes}m` : ""}</span>` : ""}
           </button>
@@ -1593,27 +1606,27 @@
       }
 
       return `
-        <section class="glass-card rounded-2xl p-2.5 space-y-2">
+        <section class="light-card rounded-2xl p-2.5 space-y-2">
           <div class="flex items-center justify-between gap-2">
-            <input type="month" value="${year}-${pad2(monthIdx + 1)}" class="${isOwnerView ? "owner-cal-month" : "emp-cal-month"} rounded-xl bg-slate-900 border border-slate-700 px-2 py-1 text-xs text-white font-semibold" />
+            <input type="month" value="${year}-${pad2(monthIdx + 1)}" class="${isOwnerView ? "owner-cal-month" : "emp-cal-month"} rounded-xl bg-slate-50 border border-slate-300 px-2 py-1 text-xs text-slate-900 font-bold" />
             <div class="text-right leading-tight">
-              <div class="text-[11px] font-extrabold text-white">${summary.daysCount}d · ${msToHoursMinutes(summary.confirmedMs).text}</div>
-              <div class="text-[11px] font-extrabold text-emerald-300">${formatExactEuro(summary.confirmedAmount)}</div>
+              <div class="text-[11px] font-extrabold text-slate-900">${summary.daysCount}d · ${msToHoursMinutes(summary.confirmedMs).text}</div>
+              <div class="text-[11px] font-extrabold text-emerald-700">${formatExactEuro(summary.confirmedAmount)}</div>
             </div>
           </div>
 
-          <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400">
+          <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-500">
             <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
           </div>
           <div class="grid grid-cols-7 gap-1">
             ${cells.join("")}
           </div>
 
-          <div class="flex items-center justify-between text-[10px] text-slate-300 pt-1 border-t border-slate-800/80">
+          <div class="flex items-center justify-between text-[10px] text-slate-600 font-semibold pt-1 border-t border-slate-200">
             <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></i> Pendiente</span>
-            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-emerald-400 inline-block"></i> Confirmado</span>
-            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-sky-400 inline-block"></i> En curso</span>
-            ${summary.closure ? `<span class="text-emerald-300 font-bold">Pagado ${formatExactEuro(summary.closure.amountPaid)}</span>` : ""}
+            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block"></i> Confirmado</span>
+            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-sky-500 inline-block"></i> En curso</span>
+            ${summary.closure ? `<span class="text-emerald-700 font-extrabold">Pagado ${formatExactEuro(summary.closure.amountPaid)}</span>` : ""}
           </div>
         </section>
       `;
@@ -1638,21 +1651,21 @@
           const rows = dayShifts.map((s) => {
             const dur = msToHoursMinutes(getShiftDurationMs(s));
             return `
-              <div class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2 text-xs">
+              <div class="p-2 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-between gap-2 text-xs">
                 <div>
-                  <div class="font-bold text-white">${formatTimeHM(s.startTs)} – ${s.endTs ? formatTimeHM(s.endTs) : "En curso"} (${dur.text})</div>
-                  <div class="text-[10px] text-slate-400 uppercase">${s.status}</div>
+                  <div class="font-bold text-slate-900">${formatTimeHM(s.startTs)} – ${s.endTs ? formatTimeHM(s.endTs) : "En curso"} (${dur.text})</div>
+                  <div class="text-[10px] text-slate-500 font-bold uppercase">${s.status}</div>
                 </div>
                 ${isOwnerView && s.status !== "open" ? `
-                  <button onclick="closeModal(); openShiftEditorModal('${s.id}')" class="px-2 py-1 rounded-lg bg-sky-400 text-slate-950 text-[10px] font-extrabold">Ajustar</button>
+                  <button onclick="closeModal(); openShiftEditorModal('${s.id}')" class="px-2 py-1 rounded-lg bg-sky-600 text-white text-[10px] font-extrabold">Ajustar</button>
                 ` : ""}
               </div>
             `;
           }).join("");
           openModal(`
             <div class="flex items-center justify-between mb-2">
-              <div class="text-sm font-bold text-white">Detalle ${dateStr}</div>
-              <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+              <div class="text-sm font-extrabold text-slate-900">Detalle ${dateStr}</div>
+              <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
             </div>
             <div class="space-y-2">${rows}</div>
           `);
@@ -1668,17 +1681,17 @@
       const blinking = Boolean(state.blinkingChat[empId]);
 
       return `
-        <section class="glass-card rounded-2xl p-2.5 flex-1 flex flex-col justify-between gap-2 ${blinking ? "chat-alert-blink" : ""}">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
-            <span class="text-xs font-extrabold text-amber-300">Chat en tiempo real</span>
-            <button id="btn-mute-sound" class="px-2 py-0.5 rounded-lg bg-slate-800 text-[10px] font-bold text-slate-300">
+        <section class="light-card rounded-2xl p-2.5 flex-1 flex flex-col justify-between gap-2 ${blinking ? "chat-alert-blink" : ""}">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+            <span class="text-xs font-extrabold text-amber-800">Chat en tiempo real</span>
+            <button id="btn-mute-sound" type="button" class="px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
               ${state.soundMuted ? "🔇 Silenciado" : "🔊 Sonido ON"}
             </button>
           </div>
 
           <div id="chat-messages-box" class="flex-1 max-h-64 overflow-y-auto no-scrollbar space-y-1.5 py-1">
             ${msgs.length === 0 ? `
-              <div class="text-center text-xs text-slate-500 py-8">Sin mensajes todavía. Escribe algo o ficha un turno.</div>
+              <div class="text-center text-xs text-slate-400 py-8">Sin mensajes todavía. Escribe algo o ficha un turno.</div>
             ` : msgs.map((m) => {
               const isMine = m.senderRole === role;
               const isSystem = m.kind === "system";
@@ -1686,10 +1699,10 @@
                 <div class="flex flex-col ${isMine ? "items-end" : "items-start"}">
                   <div class="max-w-[86%] rounded-2xl px-3 py-1.5 text-xs ${
                     isSystem
-                      ? "bg-amber-500/15 border border-amber-400/40 text-amber-100"
+                      ? "bg-amber-100 border border-amber-300 text-amber-950 font-medium"
                       : isMine
-                      ? "bg-sky-400 text-slate-950 font-semibold"
-                      : "bg-slate-800 text-slate-100"
+                      ? "bg-sky-600 text-white font-semibold"
+                      : "bg-slate-100 border border-slate-200 text-slate-900"
                   }">
                     <div class="text-[9px] opacity-75 font-bold mb-0.5">${escapeHtml(m.senderName)} · ${formatTimeHM(m.ts)}</div>
                     <div>${escapeHtml(m.text)}</div>
@@ -1699,10 +1712,10 @@
             }).join("")}
           </div>
 
-          <div class="flex gap-1.5 pt-1 border-t border-slate-800">
+          <div class="flex gap-1.5 pt-1 border-t border-slate-200">
             <input id="chat-input-field" type="text" placeholder="Escribe un mensaje..."
-              class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
-            <button id="btn-send-chat" class="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold">
+              class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500" />
+            <button id="btn-send-chat" type="button" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">
               Enviar
             </button>
           </div>

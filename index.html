@@ -97,11 +97,11 @@
     const state = {
       homeCode: initialCode,
       role: null,              // 'owner' | 'employee' | null
-      loginPanel: null,        // null | 'owner' | 'employee' (solo se abre al pulsar el botón grande)
+      loginPanel: null,        // null | 'owner' | 'employee'
       isMaster: false,
       ownerName: savedOwnerName,
       activeEmpId: null,
-      ownerSubTab: "shifts",   // 'shifts' | 'employees' | 'tasks' | 'closures' | 'chat'
+      ownerSubTab: "shifts",   // 'shifts' | 'tasks' | 'chat' | 'employees' | 'closures'
       ownerChatEmpId: null,
       empTab: "work",          // 'work' | 'calendar' | 'chat'
       calMonth: currentYearMonth(),
@@ -120,8 +120,10 @@
     };
 
     // =========================================================================
-    // UTILIDADES DE FECHA, TIEMPO Y CÁLCULO SIN REDONDEO
+    // UTILIDADES DE FECHA, MES CORTO (NOV 2026) Y CÁLCULO (MÁX. 1 DECIMAL)
     // =========================================================================
+    const SHORT_MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
     function pad2(n) { return String(n).padStart(2, "0"); }
 
     function toDateStr(tsOrDate) {
@@ -132,6 +134,29 @@
     function currentYearMonth() {
       const d = new Date();
       return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+
+    function shiftMonthKey(monthKey, deltaMonths) {
+      const [yStr, mStr] = (monthKey || currentYearMonth()).split("-");
+      const d = new Date(Number(yStr), Number(mStr) - 1 + deltaMonths, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+
+    function formatShortMonthYear(monthKey) {
+      const [yStr, mStr] = (monthKey || currentYearMonth()).split("-");
+      const idx = Math.max(0, Math.min(11, (Number(mStr) || 1) - 1));
+      const year = Number(yStr) || new Date().getFullYear();
+      return `${SHORT_MONTHS[idx]} ${year}`;
+    }
+
+    function getMonthOptions(activeMonth) {
+      const base = currentYearMonth();
+      const set = new Set();
+      for (let i = -12; i <= 3; i++) {
+        set.add(shiftMonthKey(base, i));
+      }
+      if (activeMonth) set.add(activeMonth);
+      return Array.from(set).sort();
     }
 
     function formatTimeHM(ts) {
@@ -154,10 +179,15 @@
       return { hours, minutes, totalMinutes, text: `${hours}h ${pad2(minutes)}m` };
     }
 
-    function formatExactEuro(amount) {
+    function oneDecimalNumber(amount) {
       const val = Number(amount) || 0;
-      const str = Number.isInteger(val * 100) ? val.toFixed(2) : String(Number(val.toFixed(4)));
-      return `${str.replace(".", ",")} €`;
+      return Math.round(val * 10) / 10;
+    }
+
+    function formatOneDecimalEuro(amount) {
+      const rounded = oneDecimalNumber(amount);
+      if (Number.isInteger(rounded)) return `${rounded} €`;
+      return `${rounded.toFixed(1).replace(".", ",")} €`;
     }
 
     function getCurrentOwnerLabel() {
@@ -195,6 +225,14 @@
       if (!shift || !shift.startTs) return 0;
       const end = shift.endTs || (shift.status === "open" ? nowTs : shift.startTs);
       return Math.max(0, end - shift.startTs);
+    }
+
+    function isShiftExcessUnreviewed(shift) {
+      if (!shift || !shift.endTs || shift.status === "confirmed" || shift.excessReviewed) return false;
+      const emp = state.data.employees[shift.empId];
+      if (!emp) return false;
+      const mins = Math.floor((shift.endTs - shift.startTs) / 60000);
+      return mins > (Number(emp.dailyHours) || 8) * 60 + 60;
     }
 
     function getMonthSummary(empId, monthKey) {
@@ -505,7 +543,8 @@
           confirmedAt: null,
           adjustedBy: null,
           adjustedAt: null,
-          excessNotified: false
+          excessNotified: false,
+          excessReviewed: false
         };
         addChatMessageLocal(
           empId,
@@ -541,6 +580,7 @@
         const exceedsOneHour = dur.totalMinutes > allowedMinutes;
         if (exceedsOneHour) {
           openShift.excessNotified = true;
+          openShift.excessReviewed = false;
         }
 
         const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación.`;
@@ -566,10 +606,12 @@
       shift.status = "confirmed";
       shift.confirmedAt = Date.now();
       shift.confirmedBy = actor;
+      shift.excessNotified = false;
+      shift.excessReviewed = true;
 
       const dur = msToHoursMinutes(shift.endTs - shift.startTs);
       const rate = getRateForDate(emp, shift.date);
-      const exactEur = formatExactEuro((dur.totalMinutes / 60) * rate);
+      const exactEur = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
 
       await appendChatMessage(
         shift.empId,
@@ -599,6 +641,9 @@
       shift.endTs = endDate.getTime();
       shift.adjustedBy = actor;
       shift.adjustedAt = Date.now();
+      shift.excessNotified = false;
+      shift.excessReviewed = true;
+
       if (alsoConfirm) {
         shift.status = "confirmed";
         shift.confirmedAt = Date.now();
@@ -667,7 +712,7 @@
 
       openModal(`
         <div class="flex items-center justify-between mb-2">
-          <div class="text-sm font-extrabold text-sky-700">Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
+          <div class="text-sm font-extrabold text-sky-700">Revisar / Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
           <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
         </div>
         <div class="text-[11px] text-slate-500 mb-3">Fecha: <span class="text-slate-800 font-bold">${shift.date}</span> · Como: <span class="text-sky-700 font-bold">${escapeHtml(getCurrentOwnerLabel())}</span></div>
@@ -683,7 +728,7 @@
         </div>
         <label class="flex items-center gap-2 text-xs text-emerald-700 font-semibold mb-4 cursor-pointer">
           <input id="edit-shift-confirm" type="checkbox" checked class="rounded accent-emerald-600" />
-          <span>Confirmar turno y sumar a horas/euros al guardar</span>
+          <span>Confirmar turno y sumar a horas/importe al guardar</span>
         </label>
         <div class="flex gap-2 justify-end">
           <button onclick="closeModal()" class="px-3.5 py-2.5 rounded-2xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
@@ -726,6 +771,71 @@
         navigator.clipboard?.writeText(shareUrl).catch(() => {});
         const btn = document.getElementById("btn-copy-link");
         if (btn) btn.textContent = "¡Copiado!";
+      };
+    }
+
+    function openOwnerSettingsGearModal() {
+      const knownOwners = Array.isArray(state.data.meta?.ownerNames) ? state.data.meta.ownerNames : [];
+      openModal(`
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-extrabold text-slate-900">⚙️ Ajustes</div>
+          <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
+        </div>
+        <div class="space-y-2.5">
+          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="text-xs font-extrabold text-sky-800">Nombre de propietario</div>
+            ${knownOwners.length > 0 ? `
+              <div class="flex flex-wrap gap-1.5">
+                ${knownOwners.map((n) => `
+                  <button type="button" data-pickname="${escapeHtml(n)}" class="gear-pick-owner px-3 py-1 rounded-full bg-white border border-slate-300 text-xs font-bold text-slate-800">${escapeHtml(n)}</button>
+                `).join("")}
+              </div>
+            ` : ""}
+            <div class="flex gap-1.5">
+              <input id="gear-owner-name" type="text" value="${escapeHtml(getCurrentOwnerLabel())}" placeholder="Ej: Fran o Cris"
+                class="flex-1 min-w-0 rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs text-slate-900 font-semibold" />
+              <button id="gear-save-name" type="button" class="px-3.5 py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold shrink-0">Guardar</button>
+            </div>
+          </div>
+
+          <button id="gear-open-share" type="button" class="w-full py-3 px-4 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-left text-xs font-extrabold text-sky-900 flex items-center justify-between">
+            <span>🔗 Enlace y código del hogar</span>
+            <span>›</span>
+          </button>
+
+          <button id="gear-toggle-tablet" type="button" class="w-full py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-left text-xs font-extrabold text-slate-800 flex items-center justify-between">
+            <span>📱 Modo actual: ${state.tabletMode ? "Tablet" : "Móvil"}</span>
+            <span>Cambiar a ${state.tabletMode ? "Móvil" : "Tablet"}</span>
+          </button>
+        </div>
+      `);
+
+      document.querySelectorAll(".gear-pick-owner").forEach((btn) => {
+        btn.onclick = () => {
+          document.getElementById("gear-owner-name").value = btn.dataset.pickname;
+        };
+      });
+
+      document.getElementById("gear-save-name").onclick = async () => {
+        const val = document.getElementById("gear-owner-name").value.trim();
+        if (!val) return;
+        registerOwnerName(val);
+        closeModal();
+        saveLocal(state.homeCode, state.data);
+        render();
+        await pushToFirebase(state.homeCode, state.data);
+      };
+
+      document.getElementById("gear-open-share").onclick = () => {
+        closeModal();
+        openShareHomeModal();
+      };
+
+      document.getElementById("gear-toggle-tablet").onclick = () => {
+        state.tabletMode = !state.tabletMode;
+        localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
+        closeModal();
+        render();
       };
     }
 
@@ -790,7 +900,7 @@
                 <div class="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-extrabold text-base shadow-sm">HC</div>
                 <div>
                   <h1 class="text-lg font-extrabold tracking-tight text-slate-900 leading-none">HomeControl</h1>
-                  <span class="text-xs text-slate-500 font-medium">Horarios, tareas y pagos</span>
+                  <span class="text-xs text-slate-500 font-medium">Turnos, tareas y pagos</span>
                 </div>
               </div>
               <button id="btn-toggle-tablet" type="button" class="px-3 py-2 rounded-2xl bg-white border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
@@ -802,14 +912,13 @@
               <label class="block text-xs font-extrabold text-slate-600 mb-1.5">Código o enlace de hogar</label>
               <div class="flex gap-2">
                 <input id="access-home-code" type="text" value="${escapeHtml(state.homeCode)}" placeholder="Ej: CASA-NORTE"
-                  class="flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-sm font-extrabold uppercase tracking-wider text-slate-900 focus:outline-none focus:border-sky-500" />
-                <button id="btn-load-home" type="button" class="px-4 py-2.5 rounded-2xl bg-sky-100 hover:bg-sky-200 border border-sky-300 text-xs font-extrabold text-sky-900">
+                  class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-sm font-extrabold uppercase tracking-wider text-slate-900 focus:outline-none focus:border-sky-500" />
+                <button id="btn-load-home" type="button" class="px-4 py-2.5 rounded-2xl bg-sky-100 hover:bg-sky-200 border border-sky-300 text-xs font-extrabold text-sky-900 shrink-0">
                   Cargar
                 </button>
               </div>
             </div>
 
-            <!-- Dos botones grandes de rol -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button id="open-owner-login" type="button"
                 class="py-5 px-4 rounded-3xl text-left transition active:scale-[0.99] shadow-sm border-2 ${state.loginPanel === "owner" ? "bg-sky-600 text-white border-sky-700" : "hc-card text-slate-900 border-sky-200 hover:border-sky-400"}">
@@ -828,7 +937,6 @@
               </button>
             </div>
 
-            <!-- Formulario Propietario (oculto hasta pulsar PROPIETARIO) -->
             ${state.loginPanel === "owner" ? `
               <div class="hc-card rounded-3xl p-4 space-y-2.5">
                 <div class="flex items-center justify-between">
@@ -867,7 +975,6 @@
               </div>
             ` : ""}
 
-            <!-- Formulario Empleada (oculto hasta pulsar EMPLEADA) -->
             ${state.loginPanel === "employee" ? `
               <div class="hc-card rounded-3xl p-4 space-y-2.5">
                 <div class="flex items-center justify-between">
@@ -1051,7 +1158,7 @@
     }
 
     // =========================================================================
-    // PANTALLA EMPLEADA (BOTONES GRANDES, SIN HORAS NI EUROS EN FICHA)
+    // PANTALLA EMPLEADA (BOTONES ENTRADA / SALIDA AMPLIOS + MÁX. 1 DECIMAL)
     // =========================================================================
     function renderEmployeeScreen(emp) {
       const openShift = getOpenShift(emp.id);
@@ -1085,7 +1192,7 @@
 
           <main class="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar">
             ${state.empTab === "work" ? renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) : ""}
-            ${state.empTab === "calendar" ? renderCalendarView(emp.id, state.calMonth, false) : ""}
+            ${state.empTab === "calendar" ? renderCalendarAndPaymentsSection(emp.id, state.calMonth, false, false) : ""}
             ${state.empTab === "chat" ? renderChatView(emp.id, "employee", emp.name) : ""}
           </main>
 
@@ -1107,7 +1214,7 @@
     function renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) {
       return `
         <div class="split-pane flex-1 flex flex-col gap-2.5">
-          <section class="hc-card rounded-3xl p-4 flex flex-col justify-between gap-3">
+          <section class="hc-card rounded-3xl p-4 flex flex-col justify-between gap-4">
             <div class="flex items-center justify-between">
               <span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">
                 ${openShift ? "Turno en curso" : "Cronómetro hoy"}
@@ -1117,17 +1224,17 @@
               </span>
             </div>
 
-            <div id="emp-live-timer" class="text-4xl font-extrabold tracking-tight text-center py-2 text-slate-900">
+            <div id="emp-live-timer" class="text-4xl sm:text-5xl font-extrabold tracking-tight text-center py-2 text-slate-900">
               ${elapsedStr}
             </div>
 
-            <div class="grid grid-cols-2 gap-2.5">
+            <div class="grid grid-cols-2 gap-3">
               <button id="btn-clock-in" type="button" ${openShift ? "disabled" : ""}
-                class="py-4 rounded-2xl text-sm font-extrabold transition ${openShift ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm active:scale-[0.98]"}">
+                class="py-6 sm:py-7 rounded-3xl text-base sm:text-lg font-extrabold tracking-wide transition ${openShift ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm active:scale-[0.98]"}">
                 ENTRADA
               </button>
               <button id="btn-clock-out" type="button" ${!openShift ? "disabled" : ""}
-                class="py-4 rounded-2xl text-sm font-extrabold transition ${!openShift ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-sm active:scale-[0.98]"}">
+                class="py-6 sm:py-7 rounded-3xl text-base sm:text-lg font-extrabold tracking-wide transition ${!openShift ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-sm active:scale-[0.98]"}">
                 SALIDA
               </button>
             </div>
@@ -1201,13 +1308,13 @@
         };
       });
 
-      bindCalendarControls(emp.id, false);
+      bindCalendarAndPaymentsControls(emp.id, false);
       bindChatControls(emp.id, "employee", emp.name);
       startClockTicker();
     }
 
     // =========================================================================
-    // PANTALLA PROPIETARIO (SIN BOTÓN FICHAR ENTRADA/SALIDA)
+    // PANTALLA PROPIETARIO
     // =========================================================================
     function renderOwnerScreen() {
       const employees = Object.values(state.data.employees || {});
@@ -1215,18 +1322,17 @@
         .filter((s) => s.status === "pending")
         .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs));
 
-      const excessShifts = Object.values(state.data.shifts || {}).filter((s) => {
-        const emp = state.data.employees[s.empId];
-        if (!emp || !s.endTs) return false;
-        const mins = Math.floor((s.endTs - s.startTs) / 60000);
-        return mins > (Number(emp.dailyHours) || 8) * 60 + 60;
-      });
+      const unreviewedExcessShifts = Object.values(state.data.shifts || {})
+        .filter((s) => isShiftExcessUnreviewed(s))
+        .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs));
 
       const anyChatBlink = Object.values(state.blinkingChat || {}).some(Boolean);
       const ownerLabel = getCurrentOwnerLabel();
+      const firstExcessShift = unreviewedExcessShifts[0] || null;
 
       return `
         <div class="flex-1 flex flex-col p-2.5 gap-2 min-h-0">
+          <!-- Cabecera superior: Empleadas y Mes / Pago junto a la rueda de ajustes -->
           <header class="hc-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2 shrink-0">
             <div class="flex items-center gap-2 min-w-0">
               <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"} shrink-0"></span>
@@ -1235,47 +1341,81 @@
                 <span class="text-[10px] text-sky-700 font-extrabold ml-1">${escapeHtml(state.homeCode)}</span>
               </div>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button id="owner-rename-btn" type="button" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">Nombre</button>
-              <button id="owner-share-btn" type="button" class="px-2.5 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-[11px] font-bold text-sky-700">Enlace</button>
-              <button id="owner-toggle-tablet" type="button" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">
-                ${state.tabletMode ? "Móvil" : "Tablet"}
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button data-otab="employees" type="button" class="o-tab px-2.5 py-1.5 rounded-xl text-xs font-extrabold ${state.ownerSubTab === "employees" ? "bg-sky-600 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"}">
+                Empleadas
               </button>
-              <button id="owner-logout" type="button" class="px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-700">Salir</button>
+              <button data-otab="closures" type="button" class="o-tab px-2.5 py-1.5 rounded-xl text-xs font-extrabold ${state.ownerSubTab === "closures" ? "bg-blue-600 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"}">
+                Mes / Pago
+              </button>
+              <button id="owner-gear-btn" type="button" title="Ajustes" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-extrabold text-slate-800">
+                ⚙️
+              </button>
+              <button id="owner-logout" type="button" class="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-bold text-rose-700">
+                Salir
+              </button>
             </div>
           </header>
 
-          ${excessShifts.length > 0 ? `
-            <div class="rounded-2xl bg-amber-100 border border-amber-400 px-3 py-2 text-xs text-amber-950 font-bold shrink-0">
-              ⚠️ Aviso (+1h sobre ficha): hay ${excessShifts.length} turno(s) que superan en más de 1 hora las horas diarias previstas.
+          <!-- Aviso +1h con botón Revisar que lleva al turno y desaparece al revisar -->
+          ${firstExcessShift ? `
+            <div class="rounded-2xl bg-amber-100 border border-amber-400 px-3 py-2 text-xs text-amber-950 font-bold flex items-center justify-between gap-2 shrink-0">
+              <div class="min-w-0">
+                ⚠️ Exceso (+1h sobre ficha): ${unreviewedExcessShifts.length} turno(s) por revisar.
+              </div>
+              <button id="btn-review-excess" data-shiftid="${firstExcessShift.id}" type="button"
+                class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold shrink-0 shadow-2xs">
+                Revisar
+              </button>
             </div>
           ` : ""}
 
-          <div class="grid grid-cols-5 gap-1 hc-card rounded-2xl p-1 text-[11px] font-extrabold shrink-0">
-            <button data-otab="shifts" type="button" class="o-tab py-2 rounded-xl ${state.ownerSubTab === "shifts" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
-              Turnos ${pendingShifts.length ? `(${pendingShifts.length})` : ""}
-            </button>
-            <button data-otab="employees" type="button" class="o-tab py-2 rounded-xl ${state.ownerSubTab === "employees" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
-              Empleadas
-            </button>
-            <button data-otab="tasks" type="button" class="o-tab py-2 rounded-xl ${state.ownerSubTab === "tasks" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
-              Tareas
-            </button>
-            <button data-otab="closures" type="button" class="o-tab py-2 rounded-xl ${state.ownerSubTab === "closures" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
-              Mes / Pago
-            </button>
-            <button data-otab="chat" type="button" class="o-tab py-2 rounded-xl ${anyChatBlink ? "chat-alert-blink text-amber-950" : state.ownerSubTab === "chat" ? "bg-amber-500 text-slate-950" : "text-slate-700 bg-slate-50"}">
-              Chat ${anyChatBlink ? "🔔" : ""}
-            </button>
-          </div>
-
+          <!-- Contenido principal -->
           <div class="flex-1 flex flex-col gap-2 min-h-0 ${state.ownerSubTab === "chat" ? "" : "overflow-y-auto no-scrollbar"}">
             ${state.ownerSubTab === "shifts" ? renderOwnerShiftsTab(employees, pendingShifts) : ""}
-            ${state.ownerSubTab === "employees" ? renderOwnerEmployeesTab(employees) : ""}
+            ${state.ownerSubTab === "closures" ? renderOwnerCalendarAndPaymentsTab(employees) : ""}
             ${state.ownerSubTab === "tasks" ? renderOwnerTasksTab(employees) : ""}
-            ${state.ownerSubTab === "closures" ? renderOwnerClosuresTab(employees) : ""}
+            ${state.ownerSubTab === "employees" ? renderOwnerEmployeesTab(employees) : ""}
             ${state.ownerSubTab === "chat" ? renderOwnerChatTab(employees) : ""}
           </div>
+
+          <!-- Barra principal inferior: Turnos, Tareas y Chat -->
+          <nav class="grid grid-cols-3 gap-2 hc-card rounded-2xl p-1.5 text-xs font-extrabold shrink-0">
+            <button data-otab="shifts" type="button" class="o-tab py-2.5 rounded-xl ${state.ownerSubTab === "shifts" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
+              Turnos ${pendingShifts.length ? `(${pendingShifts.length})` : ""}
+            </button>
+            <button data-otab="tasks" type="button" class="o-tab py-2.5 rounded-xl ${state.ownerSubTab === "tasks" ? "bg-sky-600 text-white" : "text-slate-700 bg-slate-50"}">
+              Tareas
+            </button>
+            <button data-otab="chat" type="button" class="o-tab py-2.5 rounded-xl ${anyChatBlink ? "chat-alert-blink text-amber-950" : state.ownerSubTab === "chat" ? "bg-amber-500 text-slate-950" : "text-slate-700 bg-slate-50"}">
+              Chat ${anyChatBlink ? "🔔" : ""}
+            </button>
+          </nav>
+        </div>
+      `;
+    }
+
+    function renderOwnerCalendarAndPaymentsTab(employees) {
+      const selectedEmpId = state.ownerCalEmpId || employees[0]?.id || null;
+      if (!selectedEmpId || employees.length === 0) {
+        return `
+          <div class="hc-card rounded-3xl p-4 text-center text-xs text-slate-500">
+            Añade una empleada en <strong>Empleadas</strong> para ver su calendario y cierre mensual.
+          </div>
+        `;
+      }
+
+      return `
+        <div class="space-y-2.5">
+          <div class="hc-card rounded-2xl px-3.5 py-2.5 flex items-center gap-3">
+            <span class="text-xs font-bold text-slate-600 shrink-0">Empleada:</span>
+            <select id="owner-cal-emp" class="flex-1 min-w-0 rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-sm text-slate-900 font-extrabold">
+              ${employees.map((e) => `<option value="${e.id}" ${e.id === selectedEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
+            </select>
+          </div>
+
+          ${renderCalendarAndPaymentsSection(selectedEmpId, state.ownerCalMonth, true, true)}
         </div>
       `;
     }
@@ -1296,7 +1436,7 @@
               const emp = state.data.employees[s.empId];
               const dur = msToHoursMinutes((s.endTs || Date.now()) - s.startTs);
               const rate = getRateForDate(emp, s.date);
-              const eur = formatExactEuro((dur.totalMinutes / 60) * rate);
+              const eur = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
               return `
                 <div class="rounded-2xl bg-amber-50 border border-amber-300 p-3 flex items-center justify-between gap-2">
                   <div class="min-w-0">
@@ -1311,8 +1451,8 @@
               `;
             }).join("")}
 
-            <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider pt-2 border-t border-slate-200">Turnos recientes (editar / confirmar)</div>
-            <div class="space-y-1.5 max-h-52 overflow-y-auto no-scrollbar">
+            <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider pt-2 border-t border-slate-200">Turnos recientes</div>
+            <div class="space-y-1.5 max-h-60 overflow-y-auto no-scrollbar">
               ${allShifts.slice(0, 12).map((s) => {
                 const dur = msToHoursMinutes(getShiftDurationMs(s));
                 const badgeClass =
@@ -1337,22 +1477,6 @@
               }).join("")}
             </div>
           </section>
-
-          <section class="space-y-2">
-            ${employees.length > 0 ? `
-              <div class="hc-card rounded-2xl p-2.5 flex items-center gap-2">
-                <span class="text-xs font-bold text-slate-600">Empleada:</span>
-                <select id="owner-cal-emp" class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 font-bold">
-                  ${employees.map((e) => `<option value="${e.id}" ${e.id === calEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
-                </select>
-              </div>
-              ${calEmpId ? renderCalendarView(calEmpId, state.ownerCalMonth, true) : ""}
-            ` : `
-              <div class="hc-card rounded-3xl p-4 text-center text-xs text-slate-500">
-                Añade una empleada en la pestaña <strong>Empleadas</strong> para ver su calendario.
-              </div>
-            `}
-          </section>
         </div>
       `;
     }
@@ -1368,7 +1492,7 @@
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="block text-[11px] text-slate-600 font-semibold mb-1">Tarifa €/h (defecto 10)</label>
-                <input id="new-emp-rate" type="number" step="0.01" value="10" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+                <input id="new-emp-rate" type="number" step="0.1" value="10" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
               </div>
               <div>
                 <label class="block text-[11px] text-slate-600 font-semibold mb-1">Horas diarias ficha</label>
@@ -1383,8 +1507,8 @@
                 ${knownOwners.map((n) => `<span class="px-3 py-1 rounded-full bg-sky-50 border border-sky-200 text-xs font-bold text-sky-800">${escapeHtml(n)}</span>`).join("")}
               </div>
               <div class="flex gap-1.5">
-                <input id="add-owner-name-input" type="text" placeholder="Añadir nombre (ej: Cris)" class="flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-                <button id="btn-add-owner-name" type="button" class="px-4 py-2 rounded-2xl bg-sky-600 text-white text-xs font-extrabold">Añadir</button>
+                <input id="add-owner-name-input" type="text" placeholder="Añadir nombre (ej: Cris)" class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+                <button id="btn-add-owner-name" type="button" class="px-4 py-2 rounded-2xl bg-sky-600 text-white text-xs font-extrabold shrink-0">Añadir</button>
               </div>
             </div>
           </section>
@@ -1398,12 +1522,12 @@
                   <div class="flex items-center justify-between">
                     <div>
                       <div class="text-xs font-extrabold text-slate-900">${escapeHtml(e.name)}</div>
-                      <div class="text-xs text-slate-600">Tarifa: <strong class="text-emerald-700">${formatExactEuro(currentRate)}/h</strong> · Ficha: <strong class="text-sky-700">${e.dailyHours}h/día</strong></div>
+                      <div class="text-xs text-slate-600">Tarifa: <strong class="text-emerald-700">${formatOneDecimalEuro(currentRate)}/h</strong> · Ficha: <strong class="text-sky-700">${e.dailyHours}h/día</strong></div>
                     </div>
                     <button data-delemp="${e.id}" type="button" class="btn-del-emp px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">Eliminar</button>
                   </div>
                   <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
-                    <input id="rate-val-${e.id}" type="number" step="0.01" value="${currentRate}" class="rounded-xl bg-white border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
+                    <input id="rate-val-${e.id}" type="number" step="0.1" value="${oneDecimalNumber(currentRate)}" class="rounded-xl bg-white border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
                     <input id="rate-date-${e.id}" type="date" value="${toDateStr(Date.now())}" class="rounded-xl bg-white border border-slate-300 px-2 py-1.5 text-xs text-slate-900" />
                     <button data-saverate="${e.id}" type="button" class="btn-save-rate rounded-xl bg-sky-600 text-white text-xs font-extrabold">Aplicar</button>
                   </div>
@@ -1415,8 +1539,8 @@
               <div class="pt-2 border-t border-slate-200 space-y-1.5">
                 <div class="text-xs font-bold text-slate-700">Cambiar contraseña máster</div>
                 <div class="flex gap-1.5">
-                  <input id="new-master-pass" type="password" placeholder="Nueva clave máster" class="flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-                  <button id="btn-change-master" type="button" class="px-4 py-2 rounded-2xl bg-slate-800 text-white text-xs font-bold">Guardar</button>
+                  <input id="new-master-pass" type="password" placeholder="Nueva clave máster" class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+                  <button id="btn-change-master" type="button" class="px-4 py-2 rounded-2xl bg-slate-800 text-white text-xs font-bold shrink-0">Guardar</button>
                 </div>
               </div>
             ` : ""}
@@ -1436,8 +1560,8 @@
             </select>
             <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900" />
             <div class="flex items-center gap-2">
-              <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-              <button id="btn-task-today" type="button" class="px-3.5 py-2 rounded-2xl bg-sky-100 text-xs font-extrabold text-sky-800">Hoy</button>
+              <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+              <button id="btn-task-today" type="button" class="px-3.5 py-2 rounded-2xl bg-sky-100 text-xs font-extrabold text-sky-800 shrink-0">Hoy</button>
             </div>
             <button id="btn-add-task" type="button" class="w-full py-3 rounded-2xl bg-sky-600 text-white text-xs font-extrabold">Asignar tarea</button>
           </section>
@@ -1458,53 +1582,6 @@
             }).join("")}
           </section>
         </div>
-      `;
-    }
-
-    function renderOwnerClosuresTab(employees) {
-      const monthKey = state.ownerCalMonth || currentYearMonth();
-      return `
-        <section class="hc-card rounded-3xl p-3.5 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <div class="text-xs font-extrabold text-emerald-800 uppercase tracking-wider">Cierre y registro de pagos</div>
-            <input id="closure-month-input" type="month" value="${monthKey}" class="rounded-xl bg-slate-50 border border-slate-300 px-3 py-1.5 text-xs text-slate-900 font-semibold" />
-          </div>
-          ${employees.length === 0 ? `<div class="text-xs text-slate-500">Sin empleadas para cerrar mes.</div>` : employees.map((emp) => {
-            const sum = getMonthSummary(emp.id, monthKey);
-            const closed = sum.closure;
-            return `
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-3 space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-slate-900">${escapeHtml(emp.name)}</span>
-                  <span class="text-[11px] px-2.5 py-0.5 rounded-full font-bold ${closed ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}">
-                    ${closed ? `Cerrado (${closed.paidDate})` : "Abierto"}
-                  </span>
-                </div>
-                <div class="grid grid-cols-3 gap-1.5 text-center bg-white border border-slate-200 rounded-2xl p-2">
-                  <div>
-                    <div class="text-[10px] text-slate-500">Días</div>
-                    <div class="text-xs font-extrabold text-slate-900">${sum.daysCount}</div>
-                  </div>
-                  <div>
-                    <div class="text-[10px] text-slate-500">Confirmado</div>
-                    <div class="text-xs font-extrabold text-emerald-700">${msToHoursMinutes(sum.confirmedMs).text}</div>
-                  </div>
-                  <div>
-                    <div class="text-[10px] text-slate-500">Importe exacto</div>
-                    <div class="text-xs font-extrabold text-sky-700">${formatExactEuro(sum.confirmedAmount)}</div>
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <input id="pay-amt-${emp.id}" type="number" step="0.01" value="${Number(sum.confirmedAmount.toFixed(2))}" class="rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-                  <input id="pay-date-${emp.id}" type="date" value="${closed?.paidDate || toDateStr(Date.now())}" class="rounded-xl bg-white border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-                </div>
-                <button data-closeemp="${emp.id}" type="button" class="btn-close-month w-full py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-extrabold">
-                  ${closed ? "Actualizar cierre y pago" : "Cerrar mes y guardar pago"}
-                </button>
-              </div>
-            `;
-          }).join("")}
-        </section>
       `;
     }
 
@@ -1531,53 +1608,30 @@
     }
 
     function bindOwnerScreen() {
-      document.getElementById("owner-rename-btn").onclick = () => {
-        const knownOwners = Array.isArray(state.data.meta?.ownerNames) ? state.data.meta.ownerNames : [];
-        openModal(`
-          <div class="flex items-center justify-between mb-2">
-            <div class="text-sm font-extrabold text-sky-700">Nombre de propietario</div>
-            <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
-          </div>
-          ${knownOwners.length > 0 ? `
-            <div class="flex flex-wrap gap-1.5 mb-2.5">
-              ${knownOwners.map((n) => `
-                <button type="button" data-pickname="${escapeHtml(n)}" class="modal-pick-owner px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800">${escapeHtml(n)}</button>
-              `).join("")}
-            </div>
-          ` : ""}
-          <input id="modal-owner-name" type="text" value="${escapeHtml(getCurrentOwnerLabel())}" placeholder="Ej: Fran o Cris" class="w-full rounded-2xl bg-slate-100 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 font-semibold mb-3" />
-          <div class="flex gap-2 justify-end">
-            <button onclick="closeModal()" class="px-3.5 py-2 rounded-2xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
-            <button id="btn-save-owner-name" class="px-4 py-2 rounded-2xl bg-sky-600 text-white text-xs font-extrabold">Guardar</button>
-          </div>
-        `);
-        document.querySelectorAll(".modal-pick-owner").forEach((b) => {
-          b.onclick = () => {
-            document.getElementById("modal-owner-name").value = b.dataset.pickname;
-          };
-        });
-        document.getElementById("btn-save-owner-name").onclick = async () => {
-          const val = document.getElementById("modal-owner-name").value.trim();
-          if (!val) return;
-          registerOwnerName(val);
-          closeModal();
-          saveLocal(state.homeCode, state.data);
-          render();
-          await pushToFirebase(state.homeCode, state.data);
-        };
-      };
+      const gearBtn = document.getElementById("owner-gear-btn");
+      if (gearBtn) gearBtn.onclick = openOwnerSettingsGearModal;
 
-      document.getElementById("owner-toggle-tablet").onclick = () => {
-        state.tabletMode = !state.tabletMode;
-        localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
-        render();
-      };
-      document.getElementById("owner-share-btn").onclick = openShareHomeModal;
       document.getElementById("owner-logout").onclick = () => {
         stopRealtimeSync();
         state.role = null;
         render();
       };
+
+      const reviewExcessBtn = document.getElementById("btn-review-excess");
+      if (reviewExcessBtn) {
+        reviewExcessBtn.onclick = () => {
+          const targetShiftId = reviewExcessBtn.dataset.shiftid;
+          const targetShift = state.data.shifts[targetShiftId];
+          if (targetShift) {
+            state.ownerCalEmpId = targetShift.empId;
+          }
+          state.ownerSubTab = "shifts";
+          render();
+          if (targetShift) {
+            openShiftEditorModal(targetShiftId);
+          }
+        };
+      }
 
       document.querySelectorAll(".o-tab").forEach((btn) => {
         btn.onclick = () => {
@@ -1602,7 +1656,7 @@
           state.ownerCalEmpId = calEmpSel.value;
           render();
         };
-        bindCalendarControls(calEmpSel.value, true);
+        bindCalendarAndPaymentsControls(calEmpSel.value, true);
       }
 
       const btnAddOwnerName = document.getElementById("btn-add-owner-name");
@@ -1626,7 +1680,7 @@
           if (!name) return;
           const rawPass = document.getElementById("new-emp-pass").value.trim();
           const pass = rawPass || name.toLowerCase();
-          const rate = Math.max(0, Number(document.getElementById("new-emp-rate").value) || 10);
+          const rate = oneDecimalNumber(document.getElementById("new-emp-rate").value);
           const dailyHours = Math.max(0.5, Number(document.getElementById("new-emp-hours").value) || 4);
           const id = `emp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
 
@@ -1651,7 +1705,7 @@
           const empId = btn.dataset.saverate;
           const emp = state.data.employees[empId];
           if (!emp) return;
-          const rate = Math.max(0, Number(document.getElementById(`rate-val-${empId}`).value));
+          const rate = oneDecimalNumber(document.getElementById(`rate-val-${empId}`).value);
           const effectiveDate = document.getElementById(`rate-date-${empId}`).value || toDateStr(Date.now());
           emp.rateHistory = Array.isArray(emp.rateHistory) ? emp.rateHistory : [];
           emp.rateHistory.push({ effectiveDate, rate });
@@ -1714,32 +1768,6 @@
         };
       });
 
-      const closureMonthInput = document.getElementById("closure-month-input");
-      if (closureMonthInput) {
-        closureMonthInput.onchange = () => {
-          state.ownerCalMonth = closureMonthInput.value;
-          render();
-        };
-      }
-      document.querySelectorAll(".btn-close-month").forEach((btn) => {
-        btn.onclick = async () => {
-          const empId = btn.dataset.closeemp;
-          const monthKey = state.ownerCalMonth || currentYearMonth();
-          const amountPaid = Number(document.getElementById(`pay-amt-${empId}`).value) || 0;
-          const paidDate = document.getElementById(`pay-date-${empId}`).value || toDateStr(Date.now());
-          state.data.closures[`${empId}_${monthKey}`] = {
-            empId,
-            monthKey,
-            amountPaid,
-            paidDate,
-            closedAt: Date.now()
-          };
-          saveLocal(state.homeCode, state.data);
-          render();
-          await pushToFirebase(state.homeCode, state.data);
-        };
-      });
-
       document.querySelectorAll(".btn-select-chatemp").forEach((btn) => {
         btn.onclick = () => {
           state.ownerChatEmpId = btn.dataset.chatemp;
@@ -1753,73 +1781,185 @@
     }
 
     // =========================================================================
-    // CALENDARIO MENSUAL COMPLETO (AMARILLO PENDIENTE / VERDE CONFIRMADO)
+    // CALENDARIO Y PAGOS (SELECTOR MES CORTO NOV 2026 + ANCHO COMPLETO + 1 DEC)
     // =========================================================================
-    function renderCalendarView(empId, monthKey, isOwnerView) {
-      const [yStr, mStr] = (monthKey || currentYearMonth()).split("-");
+    function renderCalendarAndPaymentsSection(empId, monthKey, isOwnerView, showClosureAndShifts) {
+      const activeMonthKey = monthKey || currentYearMonth();
+      const [yStr, mStr] = activeMonthKey.split("-");
       const year = Number(yStr);
       const monthIdx = Number(mStr) - 1;
+      const normalizedMonthKey = `${year}-${pad2(monthIdx + 1)}`;
+
       const firstDay = new Date(year, monthIdx, 1);
       const lastDay = new Date(year, monthIdx + 1, 0);
       const daysInMonth = lastDay.getDate();
-
       const startOffset = (firstDay.getDay() + 6) % 7;
-      const summary = getMonthSummary(empId, `${year}-${pad2(monthIdx + 1)}`);
+
+      const summary = getMonthSummary(empId, normalizedMonthKey);
+      const monthOptions = getMonthOptions(normalizedMonthKey);
+      const emp = state.data.employees[empId];
 
       const cells = [];
       for (let i = 0; i < startOffset; i++) {
-        cells.push(`<div class="h-10 rounded-xl bg-slate-100/70"></div>`);
+        cells.push(`<div class="h-12 rounded-2xl bg-slate-100/60"></div>`);
       }
 
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${pad2(monthIdx + 1)}-${pad2(day)}`;
+        const dateStr = `${normalizedMonthKey}-${pad2(day)}`;
         const info = getDayStatusSummary(empId, dateStr);
-        let bgClass = "bg-slate-50 text-slate-700 border-slate-200";
+        let bgClass = "bg-white text-slate-800 border-slate-200";
         if (info.state === "confirmed") {
-          bgClass = "bg-emerald-100 text-emerald-900 border-emerald-400";
+          bgClass = "bg-emerald-100/90 text-emerald-950 border-emerald-300";
         } else if (info.state === "pending") {
-          bgClass = "bg-amber-100 text-amber-900 border-amber-400";
+          bgClass = "bg-amber-100/90 text-amber-950 border-amber-300";
         } else if (info.state === "open") {
-          bgClass = "bg-sky-100 text-sky-900 border-sky-400";
+          bgClass = "bg-sky-100/90 text-sky-950 border-sky-300";
         }
 
         const hm = info.totalMs > 0 ? msToHoursMinutes(info.totalMs) : null;
         cells.push(`
-          <button data-caldate="${dateStr}" type="button" class="cal-day-btn h-10 rounded-xl border ${bgClass} flex flex-col items-center justify-center leading-none">
+          <button data-caldate="${dateStr}" type="button" class="cal-day-btn h-12 rounded-2xl border ${bgClass} flex flex-col items-center justify-center leading-tight">
             <span class="text-xs font-extrabold">${day}</span>
-            ${hm ? `<span class="text-[9px] font-bold opacity-90 mt-0.5">${hm.hours}h${hm.minutes ? `${hm.minutes}m` : ""}</span>` : ""}
+            ${hm ? `<span class="text-[10px] font-bold opacity-90">${hm.hours}h ${pad2(hm.minutes)}m</span>` : ""}
           </button>
         `);
       }
 
+      const monthShifts = Object.values(state.data.shifts || {})
+        .filter((s) => s.empId === empId && s.date.startsWith(normalizedMonthKey))
+        .sort((a, b) => b.startTs - a.startTs);
+
+      const closed = summary.closure;
+      const defaultPaidVal = oneDecimalNumber(summary.confirmedAmount);
+
       return `
-        <section class="hc-card rounded-3xl p-3 space-y-2">
-          <div class="flex items-center justify-between gap-2">
-            <input type="month" value="${year}-${pad2(monthIdx + 1)}" class="${isOwnerView ? "owner-cal-month" : "emp-cal-month"} rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 font-bold" />
-            <div class="text-right leading-tight">
-              <div class="text-xs font-extrabold text-slate-900">${summary.daysCount}d · ${msToHoursMinutes(summary.confirmedMs).text}</div>
-              <div class="text-xs font-extrabold text-emerald-700">${formatExactEuro(summary.confirmedAmount)}</div>
+        <section class="hc-card rounded-3xl p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200">
+              <i class="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block"></i> En curso
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+              <i class="w-2.5 h-2.5 rounded-full bg-amber-300 inline-block"></i> Pendiente
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+              <i class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></i> Confirmado
+            </span>
+          </div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 flex-1 min-w-0">
+              <button type="button" data-monthdelta="-1" class="cal-month-step px-3 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-extrabold text-slate-800 shrink-0">◀</button>
+              <select class="${isOwnerView ? "owner-cal-month" : "emp-cal-month"} w-full min-w-0 flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2.5 text-sm text-slate-900 font-extrabold focus:outline-none focus:border-blue-500">
+                ${monthOptions.map((mk) => `<option value="${mk}" ${mk === normalizedMonthKey ? "selected" : ""}>${formatShortMonthYear(mk)}</option>`).join("")}
+              </select>
+              <button type="button" data-monthdelta="1" class="cal-month-step px-3 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-extrabold text-slate-800 shrink-0">▶</button>
+            </div>
+            <div class="text-sm font-extrabold text-slate-900 shrink-0">${formatShortMonthYear(normalizedMonthKey)}</div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="rounded-2xl bg-white border border-slate-200 p-3">
+              <div class="text-xs font-semibold text-slate-500">Días trabajados</div>
+              <div class="text-xl font-extrabold text-slate-900 mt-0.5">${summary.daysCount}</div>
+            </div>
+            <div class="rounded-2xl bg-white border border-slate-200 p-3">
+              <div class="text-xs font-semibold text-slate-500">Horas confirmadas</div>
+              <div class="text-xl font-extrabold text-slate-900 mt-0.5">${msToHoursMinutes(summary.confirmedMs).text}</div>
+            </div>
+            <div class="rounded-2xl bg-white border border-slate-200 p-3">
+              <div class="text-xs font-semibold text-slate-500">Pendiente conf.</div>
+              <div class="text-xl font-extrabold text-slate-900 mt-0.5">${msToHoursMinutes(summary.pendingMs).text}</div>
+            </div>
+            <div class="rounded-2xl bg-white border border-slate-200 p-3">
+              <div class="text-xs font-semibold text-slate-500">Importe</div>
+              <div class="text-xl font-extrabold text-emerald-700 mt-0.5">${formatOneDecimalEuro(summary.confirmedAmount)}</div>
             </div>
           </div>
 
-          <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-500">
+          <div class="grid grid-cols-7 gap-1.5 text-center text-xs font-bold text-slate-500 pt-1">
             <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
           </div>
-          <div class="grid grid-cols-7 gap-1">
+          <div class="grid grid-cols-7 gap-1.5">
             ${cells.join("")}
           </div>
-
-          <div class="flex items-center justify-between text-[11px] text-slate-600 font-semibold pt-1.5 border-t border-slate-200">
-            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></i> Pendiente</span>
-            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block"></i> Confirmado</span>
-            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-sky-500 inline-block"></i> En curso</span>
-            ${summary.closure ? `<span class="text-emerald-700 font-extrabold">Pagado ${formatExactEuro(summary.closure.amountPaid)}</span>` : ""}
-          </div>
         </section>
+
+        ${showClosureAndShifts ? `
+          <section class="hc-card rounded-3xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="text-base font-extrabold text-slate-900">Cierre y pago del mes</div>
+              ${closed ? `<span class="text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Cerrado (${closed.paidDate})</span>` : ""}
+            </div>
+            <div class="text-xs text-slate-600 font-medium">
+              Total confirmado: <strong class="text-slate-900">${formatOneDecimalEuro(summary.confirmedAmount)}</strong> (${msToHoursMinutes(summary.confirmedMs).text}).
+            </div>
+
+            <div class="space-y-1">
+              <label class="block text-xs font-extrabold text-slate-800">Importe abonado (€)</label>
+              <input id="closure-pay-amount" type="number" step="0.1" value="${closed ? oneDecimalNumber(closed.amountPaid) : defaultPaidVal}"
+                class="w-full rounded-2xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600" />
+            </div>
+
+            <div class="space-y-1">
+              <label class="block text-xs font-extrabold text-slate-800">Fecha de pago</label>
+              <input id="closure-pay-date" type="date" value="${closed?.paidDate || toDateStr(Date.now())}"
+                class="w-full rounded-2xl bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600" />
+            </div>
+
+            <button id="btn-save-month-closure" data-empid="${empId}" data-monthkey="${normalizedMonthKey}" type="button"
+              class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-xs">
+              Guardar y cerrar mes
+            </button>
+          </section>
+
+          <section class="space-y-2.5">
+            <div class="text-sm font-extrabold text-slate-900 px-1">Turnos del mes (editar o confirmar)</div>
+            ${monthShifts.length === 0 ? `
+              <div class="hc-card rounded-3xl p-4 text-xs text-slate-500">No hay turnos registrados en ${formatShortMonthYear(normalizedMonthKey)}.</div>
+            ` : monthShifts.map((s) => {
+              const dur = msToHoursMinutes(getShiftDurationMs(s));
+              const rate = getRateForDate(emp, s.date);
+              const shiftAmount = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
+              const statusBadge =
+                s.status === "confirmed"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : s.status === "pending"
+                  ? "bg-amber-100 text-amber-900"
+                  : "bg-sky-100 text-sky-800";
+              const statusLabel = s.status === "confirmed" ? "Confirmado" : s.status === "pending" ? "Pendiente" : "En curso";
+
+              return `
+                <div class="hc-card rounded-3xl p-4 space-y-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="text-sm font-extrabold text-slate-900">
+                      ${escapeHtml(s.date)} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"}
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-extrabold ${statusBadge}">${statusLabel}</span>
+                  </div>
+                  <div class="text-xs text-slate-600 font-medium">
+                    Duración: <strong class="text-slate-900">${dur.text}</strong> · Tarifa: <strong class="text-slate-900">${formatOneDecimalEuro(rate)}/h</strong> · Importe: <strong class="text-slate-900">${shiftAmount}</strong>
+                  </div>
+                  <div class="flex items-center gap-2 pt-1">
+                    ${s.status !== "open" ? `
+                      <button data-editshift="${s.id}" type="button" class="btn-edit-shift px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-xs font-bold text-slate-800">
+                        ✎ Ajustar
+                      </button>
+                    ` : ""}
+                    ${s.status === "pending" ? `
+                      <button data-confirmshift="${s.id}" type="button" class="btn-confirm-shift px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">
+                        Confirmar
+                      </button>
+                    ` : ""}
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </section>
+        ` : ""}
       `;
     }
 
-    function bindCalendarControls(empId, isOwnerView) {
+    function bindCalendarAndPaymentsControls(empId, isOwnerView) {
       const monthInput = document.querySelector(isOwnerView ? ".owner-cal-month" : ".emp-cal-month");
       if (monthInput) {
         monthInput.onchange = () => {
@@ -1828,6 +1968,38 @@
           render();
         };
       }
+
+      document.querySelectorAll(".cal-month-step").forEach((btn) => {
+        btn.onclick = () => {
+          const delta = Number(btn.dataset.monthdelta) || 0;
+          const current = isOwnerView ? (state.ownerCalMonth || currentYearMonth()) : (state.calMonth || currentYearMonth());
+          const next = shiftMonthKey(current, delta);
+          if (isOwnerView) state.ownerCalMonth = next;
+          else state.calMonth = next;
+          render();
+        };
+      });
+
+      const saveClosureBtn = document.getElementById("btn-save-month-closure");
+      if (saveClosureBtn) {
+        saveClosureBtn.onclick = async () => {
+          const targetEmpId = saveClosureBtn.dataset.empid;
+          const targetMonth = saveClosureBtn.dataset.monthkey;
+          const amountPaid = oneDecimalNumber(document.getElementById("closure-pay-amount")?.value);
+          const paidDate = document.getElementById("closure-pay-date")?.value || toDateStr(Date.now());
+          state.data.closures[`${targetEmpId}_${targetMonth}`] = {
+            empId: targetEmpId,
+            monthKey: targetMonth,
+            amountPaid,
+            paidDate,
+            closedAt: Date.now()
+          };
+          saveLocal(state.homeCode, state.data);
+          render();
+          await pushToFirebase(state.homeCode, state.data);
+        };
+      }
+
       document.querySelectorAll(".cal-day-btn").forEach((btn) => {
         btn.onclick = () => {
           const dateStr = btn.dataset.caldate;
@@ -1903,8 +2075,8 @@
 
           <div class="flex gap-2 pt-2 border-t border-slate-200 shrink-0">
             <input id="chat-input-field" type="text" placeholder="Escribe un mensaje..."
-              class="flex-1 rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500" />
-            <button id="btn-send-chat" type="button" class="px-4 py-2.5 rounded-2xl bg-amber-500 text-slate-950 text-xs font-extrabold">
+              class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500" />
+            <button id="btn-send-chat" type="button" class="px-4 py-2.5 rounded-2xl bg-amber-500 text-slate-950 text-xs font-extrabold shrink-0">
               Enviar
             </button>
           </div>

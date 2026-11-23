@@ -102,6 +102,7 @@
       ownerName: savedOwnerName,
       activeEmpId: null,
       ownerSubTab: "shifts",   // 'shifts' | 'tasks' | 'chat' | 'employees' | 'closures'
+      ownerTaskEmpId: null,
       ownerChatEmpId: null,
       empTab: "work",          // 'work' | 'calendar' | 'chat'
       calMonth: currentYearMonth(),
@@ -1143,6 +1144,7 @@
           if (firstEmp) {
             state.ownerChatEmpId = state.ownerChatEmpId || firstEmp.id;
             state.ownerCalEmpId = state.ownerCalEmpId || firstEmp.id;
+            state.ownerTaskEmpId = state.ownerTaskEmpId || firstEmp.id;
           }
           startRealtimeSync(code);
           render();
@@ -1599,18 +1601,21 @@
     }
 
     function renderOwnerTasksTab(employees) {
-      const tasks = Object.values(state.data.tasks || {}).sort((a, b) => b.createdAt - a.createdAt);
-      const defaultEmpName = employees[0]?.name || "";
+      const selectedEmpId = state.ownerTaskEmpId && state.data.employees[state.ownerTaskEmpId]
+        ? state.ownerTaskEmpId
+        : (employees[0]?.id || null);
+      const selectedEmp = selectedEmpId ? state.data.employees[selectedEmpId] : null;
+      const tasks = Object.values(state.data.tasks || {})
+        .filter((t) => !selectedEmpId || t.empId === selectedEmpId)
+        .sort((a, b) => b.createdAt - a.createdAt);
+
       return `
         <div class="split-pane flex flex-col gap-2.5">
           <section class="hc-card rounded-3xl p-3.5 space-y-2.5">
             <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider">Asignar tarea especial</div>
             <select id="task-emp-select" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-3 text-base text-slate-900 font-extrabold">
-              ${employees.map((e) => `<option value="${e.id}" data-empname="${escapeHtml(e.name)}">${escapeHtml(e.name)}</option>`).join("")}
+              ${employees.map((e) => `<option value="${e.id}" ${e.id === selectedEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
             </select>
-            <div id="task-emp-badge" class="px-3.5 py-2 rounded-2xl bg-sky-50 border border-sky-200 text-base font-extrabold text-sky-900">
-              ${escapeHtml(defaultEmpName)}
-            </div>
             <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900" />
             <div class="flex items-center gap-2">
               <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
@@ -1620,8 +1625,13 @@
           </section>
 
           <section class="hc-card rounded-3xl p-3.5 space-y-2">
-            <div class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Tareas asignadas</div>
-            ${tasks.length === 0 ? `<div class="text-xs text-slate-500">Sin tareas creadas.</div>` : tasks.map((t) => {
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                Tareas asignadas${selectedEmp ? ` · <span class="text-sky-800">${escapeHtml(selectedEmp.name)}</span>` : ""}
+              </div>
+              <span class="text-xs font-bold text-slate-500">${tasks.length}</span>
+            </div>
+            ${tasks.length === 0 ? `<div class="text-xs text-slate-500">Sin tareas asignadas a ${escapeHtml(selectedEmp?.name || "esta empleada")}.</div>` : tasks.map((t) => {
               const emp = state.data.employees[t.empId];
               return `
                 <div class="rounded-2xl bg-slate-50 border border-slate-200 p-2.5 flex items-center justify-between gap-2">
@@ -1757,6 +1767,7 @@
           };
           if (!state.ownerChatEmpId) state.ownerChatEmpId = id;
           if (!state.ownerCalEmpId) state.ownerCalEmpId = id;
+          if (!state.ownerTaskEmpId) state.ownerTaskEmpId = id;
           saveLocal(state.homeCode, state.data);
           render();
           await pushToFirebase(state.homeCode, state.data);
@@ -1784,6 +1795,7 @@
           delete state.data.employees[id];
           if (state.ownerChatEmpId === id) state.ownerChatEmpId = null;
           if (state.ownerCalEmpId === id) state.ownerCalEmpId = null;
+          if (state.ownerTaskEmpId === id) state.ownerTaskEmpId = null;
           saveLocal(state.homeCode, state.data);
           render();
           await pushToFirebase(state.homeCode, state.data);
@@ -1803,14 +1815,12 @@
       }
 
       const taskEmpSelect = document.getElementById("task-emp-select");
-      const taskEmpBadge = document.getElementById("task-emp-badge");
-      if (taskEmpSelect && taskEmpBadge) {
-        const updateTaskEmpBadge = () => {
-          const emp = state.data.employees[taskEmpSelect.value];
-          taskEmpBadge.textContent = emp ? emp.name : "";
+      if (taskEmpSelect) {
+        state.ownerTaskEmpId = taskEmpSelect.value;
+        taskEmpSelect.onchange = () => {
+          state.ownerTaskEmpId = taskEmpSelect.value;
+          render();
         };
-        updateTaskEmpBadge();
-        taskEmpSelect.onchange = updateTaskEmpBadge;
       }
 
       const btnToday = document.getElementById("btn-task-today");
@@ -1826,6 +1836,7 @@
           const title = document.getElementById("task-title-input").value.trim();
           const date = document.getElementById("task-date-input").value || toDateStr(Date.now());
           if (!empId || !title) return;
+          state.ownerTaskEmpId = empId;
           const taskId = `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
           state.data.tasks[taskId] = { id: taskId, empId, date, title, done: false, createdAt: Date.now() };
           saveLocal(state.homeCode, state.data);

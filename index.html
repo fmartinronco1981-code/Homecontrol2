@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>HomeControl</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-app: #090d16;
+      --bg-card: #111827;
+      --bg-soft: #1a2336;
+      --border-subtle: rgba(148, 163, 184, 0.16);
+      --accent: #38bdf8;
+      --accent-2: #10b981;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 15% 0%, #13223b 0%, var(--bg-app) 55%);
+      color: #f8fafc;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+    .glass-card {
+      background: linear-gradient(180deg, rgba(23, 33, 53, 0.92) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+    @keyframes chatPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.8), inset 0 0 0 1px rgba(251, 191, 36, 0.9); background-color: rgba(245, 158, 11, 0.24); }
+      50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0), inset 0 0 0 2px rgba(253, 224, 71, 1); background-color: rgba(245, 158, 11, 0.42); }
+    }
+    .chat-alert-blink {
+      animation: chatPulse 0.85s ease-in-out infinite;
+    }
+    .tablet-force .split-pane {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      align-items: start;
+    }
+    @media (min-width: 768px) and (orientation: landscape) {
+      .split-pane {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 0.85rem;
+        align-items: start;
+      }
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="select-none">
+  <div id="app" class="min-h-dvh flex flex-col max-w-md mx-auto transition-all duration-200"></div>
+
+  <!-- Modal genérico para confirmaciones, ajustes de turno, pagos y enlaces -->
+  <div id="modal-root" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-xs p-3">
+    <div id="modal-box" class="glass-card w-full max-w-sm rounded-2xl p-4 text-slate-100"></div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // CONFIGURACIÓN FIREBASE RTDB + RESPALDO LOCAL
+    // =========================================================================
+    const FIREBASE_DB_URL = "https://hogarcontrol-65d91-default-rtdb.europe-west1.firebasedatabase.app";
+
+    const DEFAULT_HOME_DATA = () => ({
+      meta: {
+        createdAt: Date.now(),
+        masterPasswordHash: null,
+        updatedAt: Date.now()
+      },
+      employees: {},   // { [empId]: { id, name, password, dailyHours, rateHistory: [{ effectiveDate, rate }], createdAt } }
+      shifts: {},      // { [shiftId]: { id, empId, date, startTs, endTs, status: 'open'|'pending'|'confirmed', confirmedBy, confirmedAt, adjustedAt, excessAlertDismissed } }
+      tasks: {},       // { [taskId]: { id, empId, date, title, done, createdAt } }
+      chats: {},       // { [empId]: { [msgId]: { id, senderRole, senderName, text, kind: 'user'|'system', ts } } }
+      closures: {}     // { [`${empId}_${YYYY-MM}`]: { empId, monthKey, amountPaid, paidDate, closedAt } }
+    });
+
+    // =========================================================================
+    // ESTADO DE SESIÓN Y UI
+    // =========================================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialCode = (urlParams.get("hogar") || localStorage.getItem("hc_last_home") || "").trim().toUpperCase();
+
+    const state = {
+      homeCode: initialCode,
+      role: null,              // 'owner' | 'employee' | null
+      isMaster: false,
+      activeEmpId: null,
+      ownerSubTab: "shifts",   // 'shifts' | 'employees' | 'tasks' | 'closures' | 'chat'
+      ownerChatEmpId: null,
+      empTab: "work",          // 'work' | 'calendar' | 'chat'
+      calMonth: currentYearMonth(),
+      ownerCalEmpId: null,
+      ownerCalMonth: currentYearMonth(),
+      tabletMode: localStorage.getItem("hc_tablet_mode") === "1",
+      soundMuted: localStorage.getItem("hc_sound_muted") === "1",
+      unreadChat: {},          // { [empId]: boolean }
+      blinkingChat: {},        // { [empId]: boolean }
+      data: DEFAULT_HOME_DATA(),
+      syncStatus: "local",     // 'connected' | 'syncing' | 'local'
+      pollTimer: null,
+      clockTimer: null,
+      audioCtx: null
+    };
+
+    // =========================================================================
+    // UTILIDADES DE FECHA, TIEMPO Y CÁLCULO SIN REDONDEO
+    // =========================================================================
+    function pad2(n) { return String(n).padStart(2, "0"); }
+
+    function toDateStr(tsOrDate) {
+      const d = tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    function currentYearMonth() {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+
+    function formatTimeHM(ts) {
+      if (!ts) return "--:--";
+      const d = new Date(ts);
+      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    }
+
+    function formatDateShort(dateStr) {
+      const [y, m, d] = dateStr.split("-");
+      return `${d}/${m}`;
+    }
+
+    function msToHoursMinutes(ms) {
+      const safeMs = Math.max(0, Number(ms) || 0);
+      const totalMinutes = Math.floor(safeMs / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return { hours, minutes, totalMinutes, text: `${hours}h ${pad2(minutes)}m` };
+    }
+
+    function formatExactEuro(amount) {
+      const val = Number(amount) || 0;
+      // Sin redondeo artificial oculto: muestra exacto hasta 4 decimales si hay fracciones, o 2 decimales limpios
+      const str = Number.isInteger(val * 100) ? val.toFixed(2) : String(Number(val.toFixed(4)));
+      return `${str.replace(".", ",")} €`;
+    }
+
+    function getRateForDate(emp, dateStr) {
+      if (!emp || !Array.isArray(emp.rateHistory) || emp.rateHistory.length === 0) return 10;
+      const sorted = [...emp.rateHistory].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+      let activeRate = sorted[0].rate;
+      for (const item of sorted) {
+        if (item.effectiveDate <= dateStr) {
+          activeRate = Number(item.rate);
+        }
+      }
+      return activeRate;
+    }
+
+    function getShiftDurationMs(shift, nowTs = Date.now()) {
+      if (!shift || !shift.startTs) return 0;
+      const end = shift.endTs || (shift.status === "open" ? nowTs : shift.startTs);
+      return Math.max(0, end - shift.startTs);
+    }
+
+    function getShiftExactAmount(emp, shift) {
+      if (!shift || shift.status !== "confirmed") return 0;
+      const durMs = getShiftDurationMs(shift, shift.endTs || shift.startTs);
+      const exactHours = durMs / 3600000;
+      const rate = getRateForDate(emp, shift.date);
+      return exactHours * rate;
+    }
+
+    function getMonthSummary(empId, monthKey) {
+      const emp = state.data.employees[empId];
+      const shifts = Object.values(state.data.shifts || {}).filter(
+        (s) => s.empId === empId && s.date.startsWith(monthKey)
+      );
+      const daysSet = new Set();
+      let confirmedMs = 0;
+      let pendingMs = 0;
+      let openMs = 0;
+      let confirmedAmount = 0;
+
+      for (const s of shifts) {
+        daysSet.add(s.date);
+        if (s.status === "confirmed") {
+          const ms = getShiftDurationMs(s, s.endTs || s.startTs);
+          confirmedMs += ms;
+          confirmedAmount += (ms / 3600000) * getRateForDate(emp, s.date);
+        } else if (s.status === "pending") {
+          pendingMs += getShiftDurationMs(s, s.endTs || s.startTs);
+        } else if (s.status === "open") {
+          openMs += getShiftDurationMs(s, Date.now());
+        }
+      }
+
+      return {
+        daysCount: daysSet.size,
+        confirmedMs,
+        pendingMs,
+        openMs,
+        confirmedAmount,
+        closure: state.data.closures[`${empId}_${monthKey}`] || null
+      };
+    }
+
+    function getDayStatusSummary(empId, dateStr) {
+      const dayShifts = Object.values(state.data.shifts || {}).filter(
+        (s) => s.empId === empId && s.date === dateStr
+      );
+      if (dayShifts.length === 0) return { state: "none", totalMs: 0, shifts: [] };
+      const hasOpen = dayShifts.some((s) => s.status === "open");
+      const hasPending = dayShifts.some((s) => s.status === "pending");
+      const allConfirmed = dayShifts.every((s) => s.status === "confirmed");
+
+      let totalMs = 0;
+      for (const s of dayShifts) {
+        if (s.status === "confirmed" || s.status === "pending") {
+          totalMs += getShiftDurationMs(s, s.endTs || s.startTs);
+        } else if (s.status === "open") {
+          totalMs += getShiftDurationMs(s, Date.now());
+        }
+      }
+
+      let visualState = "mixed";
+      if (hasOpen) visualState = "open";
+      else if (hasPending) visualState = "pending";
+      else if (allConfirmed) visualState = "confirmed";
+
+      return { state: visualState, totalMs, shifts: dayShifts };
+    }
+
+    // =========================================================================
+    // SONIDO "PIPIP... PIPIP... PIPIP" POR WEB AUDIO API (SIN ARCHIVOS EXTERNOS)
+    // =========================================================================
+    let soundIntervalId = null;
+
+    function playPipPipBurst() {
+      if (state.soundMuted) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!state.audioCtx) state.audioCtx = new AudioCtx();
+        if (state.audioCtx.state === "suspended") {
+          state.audioCtx.resume().catch(() => {});
+        }
+        const ctx = state.audioCtx;
+        const now = ctx.currentTime;
+        // Tres "pipip" dobles suaves y claros
+        const pulses = [0, 0.14, 0.45, 0.59, 0.9, 1.04];
+        pulses.forEach((offset) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(980, now + offset);
+          gain.gain.setValueAtTime(0.001, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.14, now + offset + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.09);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.095);
+        });
+      } catch (_) {}
+    }
+
+    function triggerChatPipPipAlarm(empId) {
+      state.unreadChat[empId] = true;
+      state.blinkingChat[empId] = true;
+      playPipPipBurst();
+      if (soundIntervalId) clearInterval(soundIntervalId);
+      let ticks = 0;
+      soundIntervalId = setInterval(() => {
+        ticks += 1;
+        if (ticks >= 3 || state.soundMuted) {
+          clearInterval(soundIntervalId);
+          soundIntervalId = null;
+          return;
+        }
+        playPipPipBurst();
+      }, 1450);
+    }
+
+    function stopChatAlarmFor(empId) {
+      state.unreadChat[empId] = false;
+      state.blinkingChat[empId] = false;
+      if (soundIntervalId) {
+        clearInterval(soundIntervalId);
+        soundIntervalId = null;
+      }
+    }
+
+    // =========================================================================
+    // PERSISTENCIA: LOCALSTORAGE + FIREBASE REALTIME DATABASE
+    // =========================================================================
+    function localStorageKey(code) {
+      return `hc_home_${code}`;
+    }
+
+    function saveLocal(code, data) {
+      if (!code) return;
+      try {
+        localStorage.setItem(localStorageKey(code), JSON.stringify(data));
+        localStorage.setItem("hc_last_home", code);
+      } catch (_) {}
+    }
+
+    function loadLocal(code) {
+      if (!code) return null;
+      try {
+        const raw = localStorage.getItem(localStorageKey(code));
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function sanitizeRemoteData(raw) {
+      const base = DEFAULT_HOME_DATA();
+      if (!raw || typeof raw !== "object") return base;
+      return {
+        meta: { ...base.meta, ...(raw.meta || {}) },
+        employees: raw.employees && typeof raw.employees === "object" ? raw.employees : {},
+        shifts: raw.shifts && typeof raw.shifts === "object" ? raw.shifts : {},
+        tasks: raw.tasks && typeof raw.tasks === "object" ? raw.tasks : {},
+        chats: raw.chats && typeof raw.chats === "object" ? raw.chats : {},
+        closures: raw.closures && typeof raw.closures === "object" ? raw.closures : {}
+      };
+    }
+
+    function detectNewChatMessages(prevData, nextData) {
+      const prevChats = prevData.chats || {};
+      const nextChats = nextData.chats || {};
+      for (const empId of Object.keys(nextChats)) {
+        const prevMsgs = prevChats[empId] || {};
+        const nextMsgs = nextChats[empId] || {};
+        for (const msgId of Object.keys(nextMsgs)) {
+          if (!prevMsgs[msgId]) {
+            const msg = nextMsgs[msgId];
+            const isViewingThisChat =
+              (state.role === "employee" && state.activeEmpId === empId && state.empTab === "chat") ||
+              (state.role === "owner" && state.ownerSubTab === "chat" && state.ownerChatEmpId === empId);
+            if (!isViewingThisChat) {
+              triggerChatPipPipAlarm(empId);
+            }
+          }
+        }
+      }
+    }
+
+    async function pushToFirebase(code, data) {
+      if (!code) return;
+      data.meta = { ...(data.meta || {}), updatedAt: Date.now() };
+      saveLocal(code, data);
+      state.syncStatus = "syncing";
+      try {
+        const resp = await fetch(`${FIREBASE_DB_URL}/homes/${encodeURIComponent(code)}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        state.syncStatus = resp.ok ? "connected" : "local";
+      } catch (_) {
+        state.syncStatus = "local";
+      }
+    }
+
+    async function pullFromFirebase(code, notifyNew = true) {
+      if (!code) return null;
+      try {
+        const resp = await fetch(`${FIREBASE_DB_URL}/homes/${encodeURIComponent(code)}.json`);
+        if (!resp.ok) {
+          state.syncStatus = "local";
+          return null;
+        }
+        const remote = await resp.json();
+        state.syncStatus = "connected";
+        if (!remote) return null;
+        const cleanRemote = sanitizeRemoteData(remote);
+        const local = loadLocal(code);
+        const remoteTs = cleanRemote.meta?.updatedAt || 0;
+        const localTs = local?.meta?.updatedAt || 0;
+
+        if (remoteTs >= localTs) {
+          if (notifyNew) detectNewChatMessages(state.data, cleanRemote);
+          state.data = cleanRemote;
+          saveLocal(code, cleanRemote);
+          return cleanRemote;
+        } else if (local && localTs > remoteTs) {
+          state.data = local;
+          await pushToFirebase(code, local);
+          return local;
+        }
+        return cleanRemote;
+      } catch (_) {
+        state.syncStatus = "local";
+        return null;
+      }
+    }
+
+    function startRealtimeSync(code) {
+      stopRealtimeSync();
+      if (!code) return;
+      pullFromFirebase(code, false).then(() => render());
+      state.pollTimer = setInterval(async () => {
+        if (!state.homeCode) return;
+        const prevJson = JSON.stringify(state.data);
+        await pullFromFirebase(state.homeCode, true);
+        if (JSON.stringify(state.data) !== prevJson) {
+          render();
+        }
+      }, 2200);
+    }
+
+    function stopRealtimeSync() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
+    }
+
+    // =========================================================================
+    // ACCIONES DE DOMINIO (CHAT, FICHAJES, CONFIRMACIÓN, TAREAS, CIERRES)
+    // =========================================================================
+    async function appendChatMessage(empId, senderRole, senderName, text, kind = "user") {
+      if (!empId || !text || !text.trim()) return;
+      if (!state.data.chats[empId]) state.data.chats[empId] = {};
+      const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      state.data.chats[empId][id] = {
+        id,
+        senderRole,
+        senderName,
+        text: text.trim(),
+        kind,
+        ts: Date.now()
+      };
+      await pushToFirebase(state.homeCode, state.data);
+      render();
+    }
+
+    function hasOpenShift(empId) {
+      return Object.values(state.data.shifts || {}).some(
+        (s) => s.empId === empId && s.status === "open"
+      );
+    }
+
+    function getOpenShift(empId) {
+      return Object.values(state.data.shifts || {}).find(
+        (s) => s.empId === empId && s.status === "open"
+      ) || null;
+    }
+
+    async function clockInEmployee(empId) {
+      const emp = state.data.employees[empId];
+      if (!emp || hasOpenShift(empId)) return;
+      const now = Date.now();
+      const shiftId = `sh_${now}_${Math.random().toString(36).slice(2, 6)}`;
+      const dateStr = toDateStr(now);
+      state.data.shifts[shiftId] = {
+        id: shiftId,
+        empId,
+        date: dateStr,
+        startTs: now,
+        endTs: null,
+        status: "open",
+        confirmedBy: null,
+        confirmedAt: null,
+        adjustedAt: null,
+        excessNotified: false
+      };
+      await appendChatMessage(
+        empId,
+        "employee",
+        emp.name,
+        `Entrada fichada a las ${formatTimeHM(now)} (${formatDateShort(dateStr)}). Turno en curso.`,
+        "system"
+      );
+    }
+
+    async function clockOutEmployee(empId) {
+      const emp = state.data.employees[empId];
+      const openShift = getOpenShift(empId);
+      if (!emp || !openShift) return;
+      const now = Date.now();
+      const safeEnd = Math.max(openShift.startTs + 60000, now);
+      openShift.endTs = safeEnd;
+      openShift.status = "pending";
+
+      const dur = msToHoursMinutes(safeEnd - openShift.startTs);
+      const allowedMinutes = (Number(emp.dailyHours) || 8) * 60 + 60;
+      const exceedsOneHour = dur.totalMinutes > allowedMinutes;
+      if (exceedsOneHour) {
+        openShift.excessNotified = true;
+      }
+
+      const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación del propietario.`;
+      const alertMsg = exceedsOneHour
+        ? ` ⚠️ EXCESO (+1h sobre ficha de ${emp.dailyHours}h): revisar y ajustar hora real de salida.`
+        : "";
+
+      await appendChatMessage(empId, "employee", emp.name, baseMsg + alertMsg, "system");
+    }
+
+    async function confirmShift(shiftId) {
+      const shift = state.data.shifts[shiftId];
+      if (!shift || !shift.endTs) return;
+      const emp = state.data.employees[shift.empId];
+      shift.status = "confirmed";
+      shift.confirmedAt = Date.now();
+      shift.confirmedBy = state.isMaster ? "Propietario Máster" : "Propietario";
+
+      const dur = msToHoursMinutes(shift.endTs - shift.startTs);
+      const rate = getRateForDate(emp, shift.date);
+      const exactEur = formatExactEuro((dur.totalMinutes / 60) * rate);
+
+      await appendChatMessage(
+        shift.empId,
+        "owner",
+        shift.confirmedBy,
+        `Turno confirmado (${formatDateShort(shift.date)} ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text} · ${exactEur}). Calendario actualizado.`,
+        "system"
+      );
+    }
+
+    async function saveAdjustedShift(shiftId, newStartStr, newEndStr, alsoConfirm) {
+      const shift = state.data.shifts[shiftId];
+      if (!shift) return;
+      const emp = state.data.employees[shift.empId];
+      const [y, m, d] = shift.date.split("-").map(Number);
+
+      const [sh, sm] = newStartStr.split(":").map(Number);
+      const startDate = new Date(y, m - 1, d, sh, sm, 0, 0);
+
+      const [eh, em] = newEndStr.split(":").map(Number);
+      let endDate = new Date(y, m - 1, d, eh, em, 0, 0);
+      if (endDate.getTime() <= startDate.getTime()) {
+        endDate = new Date(endDate.getTime() + 86400000);
+      }
+
+      shift.startTs = startDate.getTime();
+      shift.endTs = endDate.getTime();
+      shift.adjustedAt = Date.now();
+      if (alsoConfirm) {
+        shift.status = "confirmed";
+        shift.confirmedAt = Date.now();
+        shift.confirmedBy = state.isMaster ? "Propietario Máster" : "Propietario";
+      } else if (shift.status === "open") {
+        shift.status = "pending";
+      }
+
+      const dur = msToHoursMinutes(shift.endTs - shift.startTs);
+      const actor = state.isMaster ? "Propietario Máster" : "Propietario";
+      const statusLabel = shift.status === "confirmed" ? "CONFIRMADO" : "PENDIENTE DE CONFIRMAR";
+
+      await appendChatMessage(
+        shift.empId,
+        "owner",
+        actor,
+        `Turno ajustado (${formatDateShort(shift.date)}: ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text}) · Estado: ${statusLabel}.`,
+        "system"
+      );
+    }
+
+    // =========================================================================
+    // MODALES INTERACTIVOS
+    // =========================================================================
+    function openModal(html) {
+      const root = document.getElementById("modal-root");
+      const box = document.getElementById("modal-box");
+      box.innerHTML = html;
+      root.classList.remove("hidden");
+      root.classList.add("flex");
+    }
+
+    function closeModal() {
+      const root = document.getElementById("modal-root");
+      root.classList.add("hidden");
+      root.classList.remove("flex");
+      document.getElementById("modal-box").innerHTML = "";
+    }
+
+    function promptClockOutConfirm(empId) {
+      const emp = state.data.employees[empId];
+      const openShift = getOpenShift(empId);
+      if (!emp || !openShift) return;
+      const elapsed = msToHoursMinutes(Date.now() - openShift.startTs).text;
+      openModal(`
+        <div class="text-sm font-bold text-amber-300 mb-1">Confirmar fichaje de salida</div>
+        <p class="text-xs text-slate-300 mb-3">
+          Vas a cerrar la entrada de las <strong class="text-white">${formatTimeHM(openShift.startTs)}</strong> (tiempo actual: <strong class="text-white">${elapsed}</strong>). Quedará pendiente de confirmación del propietario.
+        </p>
+        <div class="flex gap-2 justify-end">
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
+          <button id="btn-confirm-clockout" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">Fichar Salida</button>
+        </div>
+      `);
+      document.getElementById("btn-confirm-clockout").onclick = async () => {
+        closeModal();
+        await clockOutEmployee(empId);
+      };
+    }
+
+    function openShiftEditorModal(shiftId) {
+      const shift = state.data.shifts[shiftId];
+      if (!shift) return;
+      const emp = state.data.employees[shift.empId];
+      const startHM = formatTimeHM(shift.startTs);
+      const endHM = shift.endTs ? formatTimeHM(shift.endTs) : formatTimeHM(Date.now());
+
+      openModal(`
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-bold text-sky-300">Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
+          <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+        </div>
+        <div class="text-[11px] text-slate-400 mb-3">Fecha: <span class="text-slate-200 font-semibold">${shift.date}</span></div>
+        <div class="grid grid-cols-2 gap-2.5 mb-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Hora entrada</label>
+            <input id="edit-shift-start" type="time" value="${startHM}" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Hora salida</label>
+            <input id="edit-shift-end" type="time" value="${endHM}" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white" />
+          </div>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-emerald-300 mb-4 cursor-pointer">
+          <input id="edit-shift-confirm" type="checkbox" checked class="rounded accent-emerald-400" />
+          <span>Confirmar turno y sumar a horas/euros al guardar</span>
+        </label>
+        <div class="flex gap-2 justify-end">
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
+          <button id="btn-save-shift" class="px-3.5 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Guardar y avisar</button>
+        </div>
+      `);
+
+      document.getElementById("btn-save-shift").onclick = async () => {
+        const sVal = document.getElementById("edit-shift-start").value;
+        const eVal = document.getElementById("edit-shift-end").value;
+        const doConfirm = document.getElementById("edit-shift-confirm").checked;
+        if (!sVal || !eVal) return;
+        closeModal();
+        await saveAdjustedShift(shiftId, sVal, eVal, doConfirm);
+      };
+    }
+
+    function openShareHomeModal() {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?hogar=${encodeURIComponent(state.homeCode)}`;
+      openModal(`
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-bold text-sky-300">Código y enlace del hogar</div>
+          <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+        </div>
+        <p class="text-xs text-slate-300 mb-2">Comparte este código o enlace para vincular otros propietarios o empleadas:</p>
+        <div class="rounded-xl bg-slate-900 border border-slate-700 p-2.5 mb-2">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400">Código de hogar</div>
+          <div class="text-base font-extrabold text-sky-300 tracking-wider">${escapeHtml(state.homeCode)}</div>
+        </div>
+        <div class="rounded-xl bg-slate-900 border border-slate-700 p-2.5 mb-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">Enlace directo</div>
+          <div id="share-link-text" class="text-[11px] text-slate-200 break-all select-all">${escapeHtml(shareUrl)}</div>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Cerrar</button>
+          <button id="btn-copy-link" class="px-3.5 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Copiar enlace</button>
+        </div>
+      `);
+      document.getElementById("btn-copy-link").onclick = () => {
+        navigator.clipboard?.writeText(shareUrl).catch(() => {});
+        const btn = document.getElementById("btn-copy-link");
+        if (btn) btn.textContent = "¡Copiado!";
+      };
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // =========================================================================
+    // RENDERIZADO PRINCIPAL
+    // =========================================================================
+    function render() {
+      document.body.classList.toggle("tablet-force", state.tabletMode);
+      const app = document.getElementById("app");
+      app.className = state.tabletMode
+        ? "min-h-dvh flex flex-col max-w-4xl mx-auto transition-all duration-200"
+        : "min-h-dvh flex flex-col max-w-md mx-auto transition-all duration-200";
+
+      if (!state.homeCode || !state.role) {
+        app.innerHTML = renderAccessScreen();
+        bindAccessScreen();
+        return;
+      }
+
+      if (state.role === "employee") {
+        const emp = state.data.employees[state.activeEmpId];
+        if (!emp) {
+          state.role = null;
+          state.activeEmpId = null;
+          app.innerHTML = renderAccessScreen();
+          bindAccessScreen();
+          return;
+        }
+        app.innerHTML = renderEmployeeScreen(emp);
+        bindEmployeeScreen(emp);
+        return;
+      }
+
+      if (state.role === "owner") {
+        app.innerHTML = renderOwnerScreen();
+        bindOwnerScreen();
+      }
+    }
+
+    // =========================================================================
+    // PANTALLA DE ACCESO / ROL / HOGAR
+    // =========================================================================
+    function renderAccessScreen() {
+      const existingHome = state.homeCode ? loadLocal(state.homeCode) || state.data : null;
+      const hasMasterPass = Boolean(existingHome?.meta?.masterPasswordHash);
+      const empList = Object.values(existingHome?.employees || {});
+
+      return `
+        <div class="flex-1 flex flex-col justify-between p-4 gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/40 flex items-center justify-center text-sky-300 font-extrabold text-sm">HC</div>
+                <div>
+                  <h1 class="text-base font-extrabold tracking-tight text-white leading-none">HomeControl</h1>
+                  <span class="text-[11px] text-slate-400">Control de horarios y pagos</span>
+                </div>
+              </div>
+              <button id="btn-toggle-tablet" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-200">
+                ${state.tabletMode ? "Modo Móvil" : "Modo Tablet"}
+              </button>
+            </div>
+
+            <div class="glass-card rounded-2xl p-3.5 mb-3">
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Código o enlace de hogar</label>
+              <div class="flex gap-2">
+                <input id="access-home-code" type="text" value="${escapeHtml(state.homeCode)}" placeholder="Ej: CASA-NORTE"
+                  class="flex-1 rounded-xl bg-slate-900/90 border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white focus:outline-none focus:border-sky-400" />
+                <button id="btn-load-home" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-sky-300">
+                  Cargar
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5 mb-3">
+              <button id="choose-role-owner" class="glass-card rounded-2xl p-3.5 text-left border-2 ${state.role === "owner" ? "border-sky-400" : "border-transparent hover:border-slate-600"}">
+                <div class="text-xs font-extrabold text-sky-300">PROPIETARIO</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">${hasMasterPass ? "Entrar o enlazar" : "Crear hogar / Máster"}</div>
+              </button>
+              <button id="choose-role-emp" class="glass-card rounded-2xl p-3.5 text-left border-2 border-transparent hover:border-emerald-400/60">
+                <div class="text-xs font-extrabold text-emerald-300">EMPLEADA</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">${empList.length} disponible${empList.length === 1 ? "" : "s"}</div>
+              </button>
+            </div>
+
+            <!-- Panel acceso Propietario -->
+            <div id="owner-auth-box" class="glass-card rounded-2xl p-3.5 mb-3">
+              <div class="text-xs font-bold text-white mb-2">
+                ${hasMasterPass ? "Acceso Propietario / Edición" : "Configurar Hogar Nuevo (Propietario 1 Máster)"}
+              </div>
+              <input id="owner-pass-input" type="password" placeholder="${hasMasterPass ? "Contraseña máster del hogar" : "Crea una contraseña máster"}"
+                class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2.5 focus:outline-none focus:border-sky-400" />
+              <div class="flex items-center justify-between gap-2">
+                <label class="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                  <input id="owner-master-check" type="checkbox" checked class="rounded accent-sky-400" />
+                  <span>Propietario 1 (Máster)</span>
+                </label>
+                <button id="btn-enter-owner" class="px-4 py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">
+                  ${hasMasterPass ? "Entrar" : "Crear y Entrar"}
+                </button>
+              </div>
+              <div id="owner-auth-err" class="text-[11px] text-rose-400 mt-1.5 hidden"></div>
+            </div>
+
+            <!-- Panel acceso Empleada -->
+            <div class="glass-card rounded-2xl p-3.5">
+              <div class="text-xs font-bold text-emerald-300 mb-2">Acceso Empleada</div>
+              ${empList.length === 0 ? `
+                <div class="text-[11px] text-slate-400">No hay empleadas registradas todavía en este hogar.</div>
+              ` : `
+                <select id="emp-select" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2">
+                  ${empList.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("")}
+                </select>
+                <input id="emp-pass-input" type="password" placeholder="Contraseña de acceso"
+                  class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white mb-2.5" />
+                <button id="btn-enter-emp" class="w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">
+                  Entrar a mi espacio
+                </button>
+                <div id="emp-auth-err" class="text-[11px] text-rose-400 mt-1.5 hidden"></div>
+              `}
+            </div>
+          </div>
+
+          <div class="text-center text-[10px] text-slate-500">
+            Sincronización Firebase RTDB · Respaldo local activo · Sin datos de ejemplo
+          </div>
+        </div>
+      `;
+    }
+
+    function bindAccessScreen() {
+      document.getElementById("btn-toggle-tablet").onclick = () => {
+        state.tabletMode = !state.tabletMode;
+        localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
+        render();
+      };
+
+      document.getElementById("btn-load-home").onclick = async () => {
+        const code = document.getElementById("access-home-code").value.trim().toUpperCase();
+        if (!code) return;
+        state.homeCode = code;
+        const local = loadLocal(code);
+        state.data = local ? sanitizeRemoteData(local) : DEFAULT_HOME_DATA();
+        await pullFromFirebase(code, false);
+        render();
+      };
+
+      document.getElementById("btn-enter-owner").onclick = async () => {
+        const code = document.getElementById("access-home-code").value.trim().toUpperCase();
+        const pass = document.getElementById("owner-pass-input").value;
+        const isMasterChecked = document.getElementById("owner-master-check").checked;
+        const errEl = document.getElementById("owner-auth-err");
+
+        if (!code) {
+          errEl.textContent = "Introduce un código de hogar.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+        if (!pass) {
+          errEl.textContent = "Introduce la contraseña máster.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        state.homeCode = code;
+        const local = loadLocal(code);
+        state.data = local ? sanitizeRemoteData(local) : DEFAULT_HOME_DATA();
+        await pullFromFirebase(code, false);
+
+        const existingHash = state.data.meta?.masterPasswordHash;
+        if (!existingHash) {
+          state.data.meta.masterPasswordHash = btoa(unescape(encodeURIComponent(pass)));
+          await pushToFirebase(code, state.data);
+        } else {
+          const inputHash = btoa(unescape(encodeURIComponent(pass)));
+          if (inputHash !== existingHash) {
+            errEl.textContent = "Contraseña máster incorrecta.";
+            errEl.classList.remove("hidden");
+            return;
+          }
+        }
+
+        state.role = "owner";
+        state.isMaster = isMasterChecked;
+        const firstEmp = Object.values(state.data.employees || {})[0];
+        if (firstEmp) {
+          state.ownerChatEmpId = state.ownerChatEmpId || firstEmp.id;
+          state.ownerCalEmpId = state.ownerCalEmpId || firstEmp.id;
+        }
+        startRealtimeSync(code);
+        render();
+      };
+
+      const btnEmp = document.getElementById("btn-enter-emp");
+      if (btnEmp) {
+        btnEmp.onclick = async () => {
+          const code = document.getElementById("access-home-code").value.trim().toUpperCase();
+          const empId = document.getElementById("emp-select").value;
+          const pass = document.getElementById("emp-pass-input").value;
+          const errEl = document.getElementById("emp-auth-err");
+
+          if (!code) return;
+          state.homeCode = code;
+          const local = loadLocal(code);
+          state.data = local ? sanitizeRemoteData(local) : DEFAULT_HOME_DATA();
+          await pullFromFirebase(code, false);
+
+          const emp = state.data.employees[empId];
+          if (!emp || emp.password !== pass) {
+            errEl.textContent = "Contraseña de empleada incorrecta.";
+            errEl.classList.remove("hidden");
+            return;
+          }
+
+          state.role = "employee";
+          state.activeEmpId = emp.id;
+          state.empTab = "work";
+          startRealtimeSync(code);
+          render();
+        };
+      }
+    }
+
+    // =========================================================================
+    // PANTALLA EMPLEADA (SIN SCROLL INNECESARIO, SIN HORAS NI EUROS EN FICHA)
+    // =========================================================================
+    function renderEmployeeScreen(emp) {
+      const openShift = getOpenShift(emp.id);
+      const todayStr = toDateStr(Date.now());
+      const todaySummary = getDayStatusSummary(emp.id, todayStr);
+      const todayTasks = Object.values(state.data.tasks || {}).filter(
+        (t) => t.empId === emp.id && t.date === todayStr
+      );
+      const isBlinking = Boolean(state.blinkingChat[emp.id]);
+
+      const elapsedStr = openShift
+        ? msToHoursMinutes(Date.now() - openShift.startTs).text
+        : msToHoursMinutes(todaySummary.totalMs).text;
+
+      return `
+        <div class="flex-1 flex flex-col justify-between p-2.5 gap-2">
+          <!-- Cabecera compacta sin horas ni euros por hora -->
+          <header class="glass-card rounded-2xl px-3 py-2 flex items-center justify-between">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-400" : "bg-amber-400"} shrink-0"></span>
+              <span class="text-sm font-extrabold text-white truncate">${escapeHtml(emp.name)}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button id="emp-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-200">
+                ${state.tabletMode ? "Móvil" : "Tablet"}
+              </button>
+              <button id="emp-logout" class="px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[10px] font-bold text-rose-300">
+                Salir
+              </button>
+            </div>
+          </header>
+
+          <!-- Contenido según pestaña activa -->
+          <main class="flex-1 flex flex-col gap-2">
+            ${state.empTab === "work" ? renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) : ""}
+            ${state.empTab === "calendar" ? renderCalendarView(emp.id, state.calMonth, false) : ""}
+            ${state.empTab === "chat" ? renderChatView(emp.id, "employee", emp.name) : ""}
+          </main>
+
+          <!-- Navegación inferior fija -->
+          <nav class="grid grid-cols-3 gap-1.5 glass-card rounded-2xl p-1.5">
+            <button data-emptab="work" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "work" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Fichar / Tareas
+            </button>
+            <button data-emptab="calendar" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${state.empTab === "calendar" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Calendario
+            </button>
+            <button data-emptab="chat" class="emp-nav-btn py-2 rounded-xl text-xs font-extrabold ${isBlinking ? "chat-alert-blink text-amber-200" : state.empTab === "chat" ? "bg-amber-400 text-slate-950" : "text-slate-300"}">
+              Chat ${isBlinking ? "🔔" : ""}
+            </button>
+          </nav>
+        </div>
+      `;
+    }
+
+    function renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) {
+      return `
+        <div class="split-pane flex-1 flex flex-col gap-2">
+          <!-- Bloque Entrada / Salida / Cronómetro -->
+          <section class="glass-card rounded-2xl p-3 flex flex-col justify-between gap-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                ${openShift ? "Turno en curso" : "Cronómetro hoy"}
+              </span>
+              <span class="text-[11px] font-semibold ${openShift ? "text-emerald-300" : "text-slate-400"}">
+                ${openShift ? `Entrada ${formatTimeHM(openShift.startTs)}` : "Sin entrada activa"}
+              </span>
+            </div>
+
+            <div id="emp-live-timer" class="text-3xl font-extrabold tracking-tight text-center py-1 text-white">
+              ${elapsedStr}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-clock-in" ${openShift ? "disabled" : ""}
+                class="py-3 rounded-xl text-xs font-extrabold transition ${openShift ? "bg-slate-800/50 text-slate-600 cursor-not-allowed" : "bg-emerald-400 text-slate-950 active:scale-[0.98]"}">
+                ENTRADA
+              </button>
+              <button id="btn-clock-out" ${!openShift ? "disabled" : ""}
+                class="py-3 rounded-xl text-xs font-extrabold transition ${!openShift ? "bg-slate-800/60 text-slate-500 border border-slate-700/60 cursor-not-allowed" : "bg-amber-400 text-slate-950 active:scale-[0.98]"}">
+                SALIDA
+              </button>
+            </div>
+          </section>
+
+          <!-- Bloque Tareas del día -->
+          <section class="glass-card rounded-2xl p-3 flex-1 flex flex-col">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-extrabold text-sky-300">Tareas de hoy</span>
+              <span class="text-[11px] text-slate-400">${todayTasks.filter((t) => t.done).length}/${todayTasks.length}</span>
+            </div>
+            ${todayTasks.length === 0 ? `
+              <div class="flex-1 flex items-center justify-center text-xs text-slate-500 py-3">Sin tareas especiales hoy</div>
+            ` : `
+              <div class="space-y-1.5 max-h-44 overflow-y-auto no-scrollbar">
+                ${todayTasks.map((t) => `
+                  <label class="flex items-center gap-2.5 p-2 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer">
+                    <input type="checkbox" data-taskid="${t.id}" ${t.done ? "checked" : ""} class="emp-task-check w-4 h-4 rounded accent-emerald-400" />
+                    <span class="text-xs ${t.done ? "line-through text-slate-500" : "text-slate-100"}">${escapeHtml(t.title)}</span>
+                  </label>
+                `).join("")}
+              </div>
+            `}
+          </section>
+        </div>
+      `;
+    }
+
+    function bindEmployeeScreen(emp) {
+      document.getElementById("emp-toggle-tablet").onclick = () => {
+        state.tabletMode = !state.tabletMode;
+        localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
+        render();
+      };
+      document.getElementById("emp-logout").onclick = () => {
+        stopRealtimeSync();
+        state.role = null;
+        state.activeEmpId = null;
+        render();
+      };
+      document.querySelectorAll(".emp-nav-btn").forEach((btn) => {
+        btn.onclick = () => {
+          state.empTab = btn.dataset.emptab;
+          if (state.empTab === "chat") stopChatAlarmFor(emp.id);
+          render();
+        };
+      });
+
+      const btnIn = document.getElementById("btn-clock-in");
+      if (btnIn && !btnIn.disabled) {
+        btnIn.onclick = () => clockInEmployee(emp.id);
+      }
+      const btnOut = document.getElementById("btn-clock-out");
+      if (btnOut && !btnOut.disabled) {
+        btnOut.onclick = () => promptClockOutConfirm(emp.id);
+      }
+
+      document.querySelectorAll(".emp-task-check").forEach((chk) => {
+        chk.onchange = async () => {
+          const t = state.data.tasks[chk.dataset.taskid];
+          if (!t) return;
+          t.done = chk.checked;
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      });
+
+      bindCalendarControls(emp.id, false);
+      bindChatControls(emp.id, "employee", emp.name);
+      startClockTicker();
+    }
+
+    // =========================================================================
+    // PANTALLA PROPIETARIO (SIN BOTÓN FICHAR ENTRADA/SALIDA)
+    // =========================================================================
+    function renderOwnerScreen() {
+      const employees = Object.values(state.data.employees || {});
+      const pendingShifts = Object.values(state.data.shifts || {})
+        .filter((s) => s.status === "pending")
+        .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs));
+
+      const excessShifts = Object.values(state.data.shifts || {}).filter((s) => {
+        const emp = state.data.employees[s.empId];
+        if (!emp || !s.endTs) return false;
+        const mins = Math.floor((s.endTs - s.startTs) / 60000);
+        return mins > (Number(emp.dailyHours) || 8) * 60 + 60;
+      });
+
+      const anyChatBlink = Object.values(state.blinkingChat || {}).some(Boolean);
+
+      return `
+        <div class="flex-1 flex flex-col p-2.5 gap-2">
+          <header class="glass-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-400" : "bg-amber-400"} shrink-0"></span>
+              <div class="truncate">
+                <span class="text-xs font-extrabold text-white">${state.isMaster ? "Propietario Máster" : "Propietario"}</span>
+                <span class="text-[10px] text-sky-300 font-bold ml-1">${escapeHtml(state.homeCode)}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button id="owner-share-btn" class="px-2 py-1 rounded-lg bg-sky-400/15 border border-sky-400/35 text-[10px] font-bold text-sky-300">Enlace</button>
+              <button id="owner-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-200">
+                ${state.tabletMode ? "Móvil" : "Tablet"}
+              </button>
+              <button id="owner-logout" class="px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[10px] font-bold text-rose-300">Salir</button>
+            </div>
+          </header>
+
+          ${excessShifts.length > 0 ? `
+            <div class="rounded-xl bg-amber-500/20 border border-amber-400/60 px-3 py-2 text-[11px] text-amber-200 font-semibold">
+              ⚠️ Aviso (+1h sobre ficha): hay ${excessShifts.length} turno(s) que superan en más de 1 hora las horas diarias previstas. Revísalos y ajústalos.
+            </div>
+          ` : ""}
+
+          <!-- Pestañas de gestión -->
+          <div class="grid grid-cols-5 gap-1 glass-card rounded-2xl p-1 text-[10px] font-extrabold">
+            <button data-otab="shifts" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "shifts" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Turnos ${pendingShifts.length ? `(${pendingShifts.length})` : ""}
+            </button>
+            <button data-otab="employees" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "employees" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Empleadas
+            </button>
+            <button data-otab="tasks" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "tasks" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Tareas
+            </button>
+            <button data-otab="closures" class="o-tab py-1.5 rounded-xl ${state.ownerSubTab === "closures" ? "bg-sky-400 text-slate-950" : "text-slate-300"}">
+              Mes / Pago
+            </button>
+            <button data-otab="chat" class="o-tab py-1.5 rounded-xl ${anyChatBlink ? "chat-alert-blink text-amber-200" : state.ownerSubTab === "chat" ? "bg-amber-400 text-slate-950" : "text-slate-300"}">
+              Chat ${anyChatBlink ? "🔔" : ""}
+            </button>
+          </div>
+
+          <div class="flex-1 flex flex-col gap-2">
+            ${state.ownerSubTab === "shifts" ? renderOwnerShiftsTab(employees, pendingShifts) : ""}
+            ${state.ownerSubTab === "employees" ? renderOwnerEmployeesTab(employees) : ""}
+            ${state.ownerSubTab === "tasks" ? renderOwnerTasksTab(employees) : ""}
+            ${state.ownerSubTab === "closures" ? renderOwnerClosuresTab(employees) : ""}
+            ${state.ownerSubTab === "chat" ? renderOwnerChatTab(employees) : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderOwnerShiftsTab(employees, pendingShifts) {
+      const calEmpId = state.ownerCalEmpId || employees[0]?.id || null;
+      const allShifts = Object.values(state.data.shifts || {})
+        .filter((s) => !calEmpId || s.empId === calEmpId)
+        .sort((a, b) => b.startTs - a.startTs);
+
+      return `
+        <div class="split-pane flex flex-col gap-2">
+          <!-- Columna izquierda: Pendientes de confirmar + Historial editable -->
+          <section class="glass-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-amber-300">Pendientes de confirmar (${pendingShifts.length})</div>
+            ${pendingShifts.length === 0 ? `
+              <div class="text-xs text-slate-400 py-1">No hay turnos pendientes de confirmar.</div>
+            ` : pendingShifts.map((s) => {
+              const emp = state.data.employees[s.empId];
+              const dur = msToHoursMinutes((s.endTs || Date.now()) - s.startTs);
+              const rate = getRateForDate(emp, s.date);
+              const eur = formatExactEuro((dur.totalMinutes / 60) * rate);
+              return `
+                <div class="rounded-xl bg-amber-500/10 border border-amber-400/40 p-2.5 flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">${escapeHtml(emp?.name || "")} · ${s.date}</div>
+                    <div class="text-[11px] text-amber-200">${formatTimeHM(s.startTs)} – ${formatTimeHM(s.endTs)} (${dur.text} · ${eur})</div>
+                  </div>
+                  <div class="flex gap-1.5 shrink-0">
+                    <button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1.5 rounded-lg bg-slate-800 text-[11px] font-bold text-sky-300">Ajustar</button>
+                    <button data-confirmshift="${s.id}" class="btn-confirm-shift px-2.5 py-1.5 rounded-lg bg-emerald-400 text-slate-950 text-[11px] font-extrabold">Confirmar</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+
+            <div class="text-xs font-extrabold text-sky-300 pt-2 border-t border-slate-800">Turnos recientes (editar / confirmar)</div>
+            <div class="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
+              ${allShifts.slice(0, 12).map((s) => {
+                const emp = state.data.employees[s.empId];
+                const dur = msToHoursMinutes(getShiftDurationMs(s));
+                const badgeClass =
+                  s.status === "confirmed"
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    : s.status === "pending"
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-sky-500/20 text-sky-300 border-sky-500/40";
+                return `
+                  <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                      <div class="text-[11px] font-bold text-white">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"} (${dur.text})</div>
+                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">${s.status.toUpperCase()}</span>
+                    </div>
+                    <div class="flex gap-1 shrink-0">
+                      ${s.status === "pending" ? `<button data-confirmshift="${s.id}" class="btn-confirm-shift px-2 py-1 rounded-lg bg-emerald-400 text-slate-950 text-[10px] font-extrabold">Confirmar</button>` : ""}
+                      ${s.status !== "open" ? `<button data-editshift="${s.id}" class="btn-edit-shift px-2 py-1 rounded-lg bg-slate-800 text-[10px] font-bold text-sky-300">Editar</button>` : ""}
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </section>
+
+          <!-- Columna derecha: Calendario mensual completo por empleada -->
+          <section class="space-y-2">
+            ${employees.length > 0 ? `
+              <div class="glass-card rounded-2xl p-2 flex items-center gap-2">
+                <span class="text-[11px] font-bold text-slate-400">Empleada:</span>
+                <select id="owner-cal-emp" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white">
+                  ${employees.map((e) => `<option value="${e.id}" ${e.id === calEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
+                </select>
+              </div>
+              ${calEmpId ? renderCalendarView(calEmpId, state.ownerCalMonth, true) : ""}
+            ` : `
+              <div class="glass-card rounded-2xl p-4 text-center text-xs text-slate-400">
+                Añade una empleada en la pestaña <strong>Empleadas</strong> para ver su calendario.
+              </div>
+            `}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderOwnerEmployeesTab(employees) {
+      return `
+        <div class="split-pane flex flex-col gap-2">
+          <!-- Alta de empleada -->
+          <section class="glass-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-sky-300">Nueva empleada</div>
+            <input id="new-emp-name" type="text" placeholder="Nombre (ej: Elena)" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
+            <input id="new-emp-pass" type="text" placeholder="Contraseña (por defecto nombre en minúsculas)" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-0.5">Tarifa €/h (defecto 10)</label>
+                <input id="new-emp-rate" type="number" step="0.01" value="10" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-0.5">Horas diarias ficha</label>
+                <input id="new-emp-hours" type="number" step="0.5" value="4" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+              </div>
+            </div>
+            <button id="btn-add-emp" class="w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">Añadir empleada</button>
+          </section>
+
+          <!-- Lista y edición de empleadas -->
+          <section class="glass-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-white">Empleadas registradas (${employees.length})</div>
+            ${employees.length === 0 ? `<div class="text-xs text-slate-400">Sin empleadas todavía.</div>` : employees.map((e) => {
+              const currentRate = getRateForDate(e, toDateStr(Date.now()));
+              return `
+                <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="text-xs font-extrabold text-white">${escapeHtml(e.name)}</div>
+                      <div class="text-[11px] text-slate-400">Tarifa actual: <strong class="text-emerald-300">${formatExactEuro(currentRate)}/h</strong> · Ficha: <strong class="text-sky-300">${e.dailyHours}h/día</strong></div>
+                    </div>
+                    <button data-delemp="${e.id}" class="btn-del-emp px-2 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-[10px] font-bold">Eliminar</button>
+                  </div>
+                  <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800">
+                    <input id="rate-val-${e.id}" type="number" step="0.01" value="${currentRate}" placeholder="Nueva €/h" class="rounded-lg bg-slate-950 border border-slate-700 px-2 py-1 text-[11px] text-white" />
+                    <input id="rate-date-${e.id}" type="date" value="${toDateStr(Date.now())}" class="rounded-lg bg-slate-950 border border-slate-700 px-1.5 py-1 text-[11px] text-white" />
+                    <button data-saverate="${e.id}" class="btn-save-rate rounded-lg bg-sky-400 text-slate-950 text-[10px] font-extrabold">Aplicar tarifa</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+
+            ${state.isMaster ? `
+              <div class="pt-2 border-t border-slate-800 space-y-1.5">
+                <div class="text-[11px] font-bold text-slate-300">Cambiar contraseña máster</div>
+                <div class="flex gap-1.5">
+                  <input id="new-master-pass" type="password" placeholder="Nueva clave máster" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                  <button id="btn-change-master" class="px-3 py-1.5 rounded-xl bg-slate-700 text-xs font-bold text-white">Guardar</button>
+                </div>
+              </div>
+            ` : ""}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderOwnerTasksTab(employees) {
+      const tasks = Object.values(state.data.tasks || {}).sort((a, b) => b.createdAt - a.createdAt);
+      return `
+        <div class="split-pane flex flex-col gap-2">
+          <section class="glass-card rounded-2xl p-3 space-y-2">
+            <div class="text-xs font-extrabold text-sky-300">Asignar tarea especial</div>
+            <select id="task-emp-select" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-white">
+              ${employees.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("")}
+            </select>
+            <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
+            <div class="flex items-center gap-2">
+              <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+              <button id="btn-task-today" class="px-2.5 py-1.5 rounded-xl bg-slate-800 text-[11px] font-bold text-sky-300">Hoy</button>
+            </div>
+            <button id="btn-add-task" class="w-full py-2 rounded-xl bg-sky-400 text-slate-950 text-xs font-extrabold">Asignar tarea</button>
+          </section>
+
+          <section class="glass-card rounded-2xl p-3 space-y-1.5">
+            <div class="text-xs font-extrabold text-white mb-1">Tareas asignadas</div>
+            ${tasks.length === 0 ? `<div class="text-xs text-slate-400">Sin tareas creadas.</div>` : tasks.map((t) => {
+              const emp = state.data.employees[t.empId];
+              return `
+                <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs ${t.done ? "line-through text-slate-500" : "text-white font-semibold"} truncate">${escapeHtml(t.title)}</div>
+                    <div class="text-[10px] text-slate-400">${escapeHtml(emp?.name || "")} · ${t.date} · ${t.done ? "Hecha" : "Pendiente"}</div>
+                  </div>
+                  <button data-deltask="${t.id}" class="btn-del-task px-2 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-[10px] font-bold">Borrar</button>
+                </div>
+              `;
+            }).join("")}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderOwnerClosuresTab(employees) {
+      const monthKey = state.ownerCalMonth || currentYearMonth();
+      return `
+        <section class="glass-card rounded-2xl p-3 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-extrabold text-emerald-300">Cierre y registro de pagos</div>
+            <input id="closure-month-input" type="month" value="${monthKey}" class="rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1 text-xs text-white" />
+          </div>
+          ${employees.length === 0 ? `<div class="text-xs text-slate-400">Sin empleadas para cerrar mes.</div>` : employees.map((emp) => {
+            const sum = getMonthSummary(emp.id, monthKey);
+            const closed = sum.closure;
+            return `
+              <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-extrabold text-white">${escapeHtml(emp.name)}</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${closed ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-300"}">
+                    ${closed ? `Cerrado (${closed.paidDate})` : "Abierto"}
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 text-center bg-slate-950/70 rounded-xl p-2">
+                  <div>
+                    <div class="text-[10px] text-slate-400">Días</div>
+                    <div class="text-xs font-extrabold text-white">${sum.daysCount}</div>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">Confirmado</div>
+                    <div class="text-xs font-extrabold text-emerald-300">${msToHoursMinutes(sum.confirmedMs).text}</div>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">Importe exacto</div>
+                    <div class="text-xs font-extrabold text-sky-300">${formatExactEuro(sum.confirmedAmount)}</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <input id="pay-amt-${emp.id}" type="number" step="0.01" value="${Number(sum.confirmedAmount.toFixed(2))}" placeholder="Importe abonado €" class="rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                  <input id="pay-date-${emp.id}" type="date" value="${closed?.paidDate || toDateStr(Date.now())}" class="rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+                </div>
+                <button data-closeemp="${emp.id}" class="btn-close-month w-full py-2 rounded-xl bg-emerald-400 text-slate-950 text-xs font-extrabold">
+                  ${closed ? "Actualizar cierre y pago" : "Cerrar mes y guardar pago"}
+                </button>
+              </div>
+            `;
+          }).join("")}
+        </section>
+      `;
+    }
+
+    function renderOwnerChatTab(employees) {
+      const selectedId = state.ownerChatEmpId || employees[0]?.id || null;
+      return `
+        <div class="space-y-2 flex-1 flex flex-col">
+          ${employees.length > 0 ? `
+            <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
+              ${employees.map((e) => {
+                const blink = Boolean(state.blinkingChat[e.id]);
+                const active = e.id === selectedId;
+                return `
+                  <button data-chatemp="${e.id}" class="btn-select-chatemp px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${blink ? "chat-alert-blink text-amber-200" : active ? "bg-amber-400 text-slate-950" : "bg-slate-800 text-slate-300"}">
+                    ${escapeHtml(e.name)} ${blink ? "🔔" : ""}
+                  </button>
+                `;
+              }).join("")}
+            </div>
+            ${selectedId ? renderChatView(selectedId, "owner", state.isMaster ? "Propietario Máster" : "Propietario") : ""}
+          ` : `<div class="glass-card rounded-2xl p-4 text-xs text-slate-400">Crea una empleada para usar su chat.</div>`}
+        </div>
+      `;
+    }
+
+    function bindOwnerScreen() {
+      document.getElementById("owner-toggle-tablet").onclick = () => {
+        state.tabletMode = !state.tabletMode;
+        localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
+        render();
+      };
+      document.getElementById("owner-share-btn").onclick = openShareHomeModal;
+      document.getElementById("owner-logout").onclick = () => {
+        stopRealtimeSync();
+        state.role = null;
+        render();
+      };
+
+      document.querySelectorAll(".o-tab").forEach((btn) => {
+        btn.onclick = () => {
+          state.ownerSubTab = btn.dataset.otab;
+          if (state.ownerSubTab === "chat" && state.ownerChatEmpId) {
+            stopChatAlarmFor(state.ownerChatEmpId);
+          }
+          render();
+        };
+      });
+
+      // Confirmar / editar turnos
+      document.querySelectorAll(".btn-confirm-shift").forEach((btn) => {
+        btn.onclick = () => confirmShift(btn.dataset.confirmshift);
+      });
+      document.querySelectorAll(".btn-edit-shift").forEach((btn) => {
+        btn.onclick = () => openShiftEditorModal(btn.dataset.editshift);
+      });
+
+      const calEmpSel = document.getElementById("owner-cal-emp");
+      if (calEmpSel) {
+        calEmpSel.onchange = () => {
+          state.ownerCalEmpId = calEmpSel.value;
+          render();
+        };
+        bindCalendarControls(calEmpSel.value, true);
+      }
+
+      // Alta empleada
+      const btnAddEmp = document.getElementById("btn-add-emp");
+      if (btnAddEmp) {
+        btnAddEmp.onclick = async () => {
+          const name = document.getElementById("new-emp-name").value.trim();
+          if (!name) return;
+          const rawPass = document.getElementById("new-emp-pass").value.trim();
+          const pass = rawPass || name.toLowerCase();
+          const rate = Math.max(0, Number(document.getElementById("new-emp-rate").value) || 10);
+          const dailyHours = Math.max(0.5, Number(document.getElementById("new-emp-hours").value) || 4);
+          const id = `emp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+
+          state.data.employees[id] = {
+            id,
+            name,
+            password: pass,
+            dailyHours,
+            rateHistory: [{ effectiveDate: toDateStr(Date.now()), rate }],
+            createdAt: Date.now()
+          };
+          if (!state.ownerChatEmpId) state.ownerChatEmpId = id;
+          if (!state.ownerCalEmpId) state.ownerCalEmpId = id;
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      }
+
+      // Aplicar tarifa con fecha de inicio
+      document.querySelectorAll(".btn-save-rate").forEach((btn) => {
+        btn.onclick = async () => {
+          const empId = btn.dataset.saverate;
+          const emp = state.data.employees[empId];
+          if (!emp) return;
+          const rate = Math.max(0, Number(document.getElementById(`rate-val-${empId}`).value));
+          const effectiveDate = document.getElementById(`rate-date-${empId}`).value || toDateStr(Date.now());
+          emp.rateHistory = Array.isArray(emp.rateHistory) ? emp.rateHistory : [];
+          emp.rateHistory.push({ effectiveDate, rate });
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      });
+
+      // Eliminar empleada
+      document.querySelectorAll(".btn-del-emp").forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.dataset.delemp;
+          delete state.data.employees[id];
+          if (state.ownerChatEmpId === id) state.ownerChatEmpId = null;
+          if (state.ownerCalEmpId === id) state.ownerCalEmpId = null;
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      });
+
+      // Cambiar contraseña máster
+      const btnMaster = document.getElementById("btn-change-master");
+      if (btnMaster) {
+        btnMaster.onclick = async () => {
+          const val = document.getElementById("new-master-pass").value;
+          if (!val) return;
+          state.data.meta.masterPasswordHash = btoa(unescape(encodeURIComponent(val)));
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      }
+
+      // Tareas especiales
+      const btnToday = document.getElementById("btn-task-today");
+      if (btnToday) {
+        btnToday.onclick = () => {
+          document.getElementById("task-date-input").value = toDateStr(Date.now());
+        };
+      }
+      const btnAddTask = document.getElementById("btn-add-task");
+      if (btnAddTask) {
+        btnAddTask.onclick = async () => {
+          const empId = document.getElementById("task-emp-select").value;
+          const title = document.getElementById("task-title-input").value.trim();
+          const date = document.getElementById("task-date-input").value || toDateStr(Date.now());
+          if (!empId || !title) return;
+          const taskId = `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+          state.data.tasks[taskId] = { id: taskId, empId, date, title, done: false, createdAt: Date.now() };
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      }
+      document.querySelectorAll(".btn-del-task").forEach((btn) => {
+        btn.onclick = async () => {
+          delete state.data.tasks[btn.dataset.deltask];
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      });
+
+      // Cierre mensual y pago
+      const closureMonthInput = document.getElementById("closure-month-input");
+      if (closureMonthInput) {
+        closureMonthInput.onchange = () => {
+          state.ownerCalMonth = closureMonthInput.value;
+          render();
+        };
+      }
+      document.querySelectorAll(".btn-close-month").forEach((btn) => {
+        btn.onclick = async () => {
+          const empId = btn.dataset.closeemp;
+          const monthKey = state.ownerCalMonth || currentYearMonth();
+          const amountPaid = Number(document.getElementById(`pay-amt-${empId}`).value) || 0;
+          const paidDate = document.getElementById(`pay-date-${empId}`).value || toDateStr(Date.now());
+          state.data.closures[`${empId}_${monthKey}`] = {
+            empId,
+            monthKey,
+            amountPaid,
+            paidDate,
+            closedAt: Date.now()
+          };
+          await pushToFirebase(state.homeCode, state.data);
+          render();
+        };
+      });
+
+      // Chat selector
+      document.querySelectorAll(".btn-select-chatemp").forEach((btn) => {
+        btn.onclick = () => {
+          state.ownerChatEmpId = btn.dataset.chatemp;
+          stopChatAlarmFor(state.ownerChatEmpId);
+          render();
+        };
+      });
+      if (state.ownerSubTab === "chat" && state.ownerChatEmpId) {
+        bindChatControls(state.ownerChatEmpId, "owner", state.isMaster ? "Propietario Máster" : "Propietario");
+      }
+    }
+
+    // =========================================================================
+    // CALENDARIO MENSUAL COMPLETO (AMARILLO PENDIENTE / VERDE CONFIRMADO)
+    // =========================================================================
+    function renderCalendarView(empId, monthKey, isOwnerView) {
+      const [yStr, mStr] = (monthKey || currentYearMonth()).split("-");
+      const year = Number(yStr);
+      const monthIdx = Number(mStr) - 1;
+      const firstDay = new Date(year, monthIdx, 1);
+      const lastDay = new Date(year, monthIdx + 1, 0);
+      const daysInMonth = lastDay.getDate();
+
+      // Lunes = 0 .. Domingo = 6
+      const startOffset = (firstDay.getDay() + 6) % 7;
+      const summary = getMonthSummary(empId, `${year}-${pad2(monthIdx + 1)}`);
+
+      const cells = [];
+      for (let i = 0; i < startOffset; i++) {
+        cells.push(`<div class="h-9 rounded-lg bg-slate-950/30"></div>`);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${pad2(monthIdx + 1)}-${pad2(day)}`;
+        const info = getDayStatusSummary(empId, dateStr);
+        let bgClass = "bg-slate-900/70 text-slate-300 border-slate-800";
+        if (info.state === "confirmed") {
+          bgClass = "bg-emerald-500/25 text-emerald-200 border-emerald-400/70";
+        } else if (info.state === "pending") {
+          bgClass = "bg-amber-400/25 text-amber-200 border-amber-400/80";
+        } else if (info.state === "open") {
+          bgClass = "bg-sky-400/25 text-sky-200 border-sky-400/80";
+        }
+
+        const hm = info.totalMs > 0 ? msToHoursMinutes(info.totalMs) : null;
+        cells.push(`
+          <button data-caldate="${dateStr}" class="cal-day-btn h-9 rounded-lg border ${bgClass} flex flex-col items-center justify-center leading-none">
+            <span class="text-[11px] font-extrabold">${day}</span>
+            ${hm ? `<span class="text-[8px] font-bold opacity-90 mt-0.5">${hm.hours}h${hm.minutes ? `${hm.minutes}m` : ""}</span>` : ""}
+          </button>
+        `);
+      }
+
+      return `
+        <section class="glass-card rounded-2xl p-2.5 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <input type="month" value="${year}-${pad2(monthIdx + 1)}" class="${isOwnerView ? "owner-cal-month" : "emp-cal-month"} rounded-xl bg-slate-900 border border-slate-700 px-2 py-1 text-xs text-white font-semibold" />
+            <div class="text-right leading-tight">
+              <div class="text-[11px] font-extrabold text-white">${summary.daysCount}d · ${msToHoursMinutes(summary.confirmedMs).text}</div>
+              <div class="text-[11px] font-extrabold text-emerald-300">${formatExactEuro(summary.confirmedAmount)}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400">
+            <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+          </div>
+          <div class="grid grid-cols-7 gap-1">
+            ${cells.join("")}
+          </div>
+
+          <div class="flex items-center justify-between text-[10px] text-slate-300 pt-1 border-t border-slate-800/80">
+            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></i> Pendiente</span>
+            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-emerald-400 inline-block"></i> Confirmado</span>
+            <span class="flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-xs bg-sky-400 inline-block"></i> En curso</span>
+            ${summary.closure ? `<span class="text-emerald-300 font-bold">Pagado ${formatExactEuro(summary.closure.amountPaid)}</span>` : ""}
+          </div>
+        </section>
+      `;
+    }
+
+    function bindCalendarControls(empId, isOwnerView) {
+      const monthInput = document.querySelector(isOwnerView ? ".owner-cal-month" : ".emp-cal-month");
+      if (monthInput) {
+        monthInput.onchange = () => {
+          if (isOwnerView) state.ownerCalMonth = monthInput.value;
+          else state.calMonth = monthInput.value;
+          render();
+        };
+      }
+      document.querySelectorAll(".cal-day-btn").forEach((btn) => {
+        btn.onclick = () => {
+          const dateStr = btn.dataset.caldate;
+          const dayShifts = Object.values(state.data.shifts || {}).filter(
+            (s) => s.empId === empId && s.date === dateStr
+          );
+          if (dayShifts.length === 0) return;
+          const rows = dayShifts.map((s) => {
+            const dur = msToHoursMinutes(getShiftDurationMs(s));
+            return `
+              <div class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2 text-xs">
+                <div>
+                  <div class="font-bold text-white">${formatTimeHM(s.startTs)} – ${s.endTs ? formatTimeHM(s.endTs) : "En curso"} (${dur.text})</div>
+                  <div class="text-[10px] text-slate-400 uppercase">${s.status}</div>
+                </div>
+                ${isOwnerView && s.status !== "open" ? `
+                  <button onclick="closeModal(); openShiftEditorModal('${s.id}')" class="px-2 py-1 rounded-lg bg-sky-400 text-slate-950 text-[10px] font-extrabold">Ajustar</button>
+                ` : ""}
+              </div>
+            `;
+          }).join("");
+          openModal(`
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-sm font-bold text-white">Detalle ${dateStr}</div>
+              <button onclick="closeModal()" class="text-slate-400 text-xs px-2 py-1">✕</button>
+            </div>
+            <div class="space-y-2">${rows}</div>
+          `);
+        };
+      });
+    }
+
+    // =========================================================================
+    // CHAT EN TIEMPO REAL + ALERTA VISUAL Y SONORA
+    // =========================================================================
+    function renderChatView(empId, role, senderName) {
+      const msgs = Object.values(state.data.chats?.[empId] || {}).sort((a, b) => a.ts - b.ts);
+      const blinking = Boolean(state.blinkingChat[empId]);
+
+      return `
+        <section class="glass-card rounded-2xl p-2.5 flex-1 flex flex-col justify-between gap-2 ${blinking ? "chat-alert-blink" : ""}">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span class="text-xs font-extrabold text-amber-300">Chat en tiempo real</span>
+            <button id="btn-mute-sound" class="px-2 py-0.5 rounded-lg bg-slate-800 text-[10px] font-bold text-slate-300">
+              ${state.soundMuted ? "🔇 Silenciado" : "🔊 Sonido ON"}
+            </button>
+          </div>
+
+          <div id="chat-messages-box" class="flex-1 max-h-64 overflow-y-auto no-scrollbar space-y-1.5 py-1">
+            ${msgs.length === 0 ? `
+              <div class="text-center text-xs text-slate-500 py-8">Sin mensajes todavía. Escribe algo o ficha un turno.</div>
+            ` : msgs.map((m) => {
+              const isMine = m.senderRole === role;
+              const isSystem = m.kind === "system";
+              return `
+                <div class="flex flex-col ${isMine ? "items-end" : "items-start"}">
+                  <div class="max-w-[86%] rounded-2xl px-3 py-1.5 text-xs ${
+                    isSystem
+                      ? "bg-amber-500/15 border border-amber-400/40 text-amber-100"
+                      : isMine
+                      ? "bg-sky-400 text-slate-950 font-semibold"
+                      : "bg-slate-800 text-slate-100"
+                  }">
+                    <div class="text-[9px] opacity-75 font-bold mb-0.5">${escapeHtml(m.senderName)} · ${formatTimeHM(m.ts)}</div>
+                    <div>${escapeHtml(m.text)}</div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+
+          <div class="flex gap-1.5 pt-1 border-t border-slate-800">
+            <input id="chat-input-field" type="text" placeholder="Escribe un mensaje..."
+              class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
+            <button id="btn-send-chat" class="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold">
+              Enviar
+            </button>
+          </div>
+        </section>
+      `;
+    }
+
+    function bindChatControls(empId, role, senderName) {
+      stopChatAlarmFor(empId);
+      const box = document.getElementById("chat-messages-box");
+      if (box) box.scrollTop = box.scrollHeight;
+
+      const muteBtn = document.getElementById("btn-mute-sound");
+      if (muteBtn) {
+        muteBtn.onclick = () => {
+          state.soundMuted = !state.soundMuted;
+          localStorage.setItem("hc_sound_muted", state.soundMuted ? "1" : "0");
+          if (state.soundMuted) stopChatAlarmFor(empId);
+          render();
+        };
+      }
+
+      const sendBtn = document.getElementById("btn-send-chat");
+      const inputField = document.getElementById("chat-input-field");
+      if (sendBtn && inputField) {
+        const sendAction = async () => {
+          const txt = inputField.value.trim();
+          if (!txt) return;
+          inputField.value = "";
+          await appendChatMessage(empId, role, senderName, txt, "user");
+        };
+        sendBtn.onclick = sendAction;
+        inputField.onkeydown = (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            sendAction();
+          }
+        };
+      }
+    }
+
+    // =========================================================================
+    // TICKER DE CRONÓMETRO EN TIEMPO REAL
+    // =========================================================================
+    function startClockTicker() {
+      if (state.clockTimer) clearInterval(state.clockTimer);
+      state.clockTimer = setInterval(() => {
+        if (state.role !== "employee" || state.empTab !== "work" || !state.activeEmpId) return;
+        const emp = state.data.employees[state.activeEmpId];
+        const openShift = getOpenShift(state.activeEmpId);
+        const timerEl = document.getElementById("emp-live-timer");
+        if (!timerEl || !emp) return;
+        if (openShift) {
+          timerEl.textContent = msToHoursMinutes(Date.now() - openShift.startTs).text;
+        } else {
+          const sum = getDayStatusSummary(emp.id, toDateStr(Date.now()));
+          timerEl.textContent = msToHoursMinutes(sum.totalMs).text;
+        }
+      }, 1000);
+    }
+
+    // Arranque inicial
+    if (state.homeCode) {
+      const local = loadLocal(state.homeCode);
+      if (local) state.data = sanitizeRemoteData(local);
+      pullFromFirebase(state.homeCode, false).then(() => render());
+    } else {
+      render();
+    }
+  </script>
+</body>
+</html>

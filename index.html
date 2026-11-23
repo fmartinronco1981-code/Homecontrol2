@@ -193,7 +193,14 @@
     function getCurrentOwnerLabel() {
       const clean = (state.ownerName || "").trim();
       if (clean) return clean;
-      return state.isMaster ? "Propietario 1" : "Propietario";
+      return state.isMaster ? "Fran" : "Propietario";
+    }
+
+    function getOwnerBadgeLetter() {
+      const label = getCurrentOwnerLabel().trim();
+      if (!label) return "F";
+      if (label.toLowerCase().startsWith("fran")) return "F";
+      return label.charAt(0).toUpperCase();
     }
 
     function registerOwnerName(name) {
@@ -228,7 +235,7 @@
     }
 
     function isShiftExcessUnreviewed(shift) {
-      if (!shift || !shift.endTs || shift.status === "confirmed" || shift.excessReviewed) return false;
+      if (!shift || shift.status === "open" || !shift.endTs || shift.excessReviewed) return false;
       const emp = state.data.employees[shift.empId];
       if (!emp) return false;
       const mins = Math.floor((shift.endTs - shift.startTs) / 60000);
@@ -596,6 +603,22 @@
       } finally {
         state.isBusyAction = false;
       }
+    }
+
+    async function acknowledgeExcessShifts(shiftIds) {
+      let changed = false;
+      for (const id of shiftIds || []) {
+        const sh = state.data.shifts[id];
+        if (sh && !sh.excessReviewed) {
+          sh.excessReviewed = true;
+          sh.excessNotified = false;
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      saveLocal(state.homeCode, state.data);
+      render();
+      await pushToFirebase(state.homeCode, state.data);
     }
 
     async function confirmShift(shiftId) {
@@ -1327,19 +1350,20 @@
         .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs));
 
       const anyChatBlink = Object.values(state.blinkingChat || {}).some(Boolean);
-      const ownerLabel = getCurrentOwnerLabel();
+      const badgeLetter = getOwnerBadgeLetter();
       const firstExcessShift = unreviewedExcessShifts[0] || null;
+      const firstExcessEmp = firstExcessShift ? state.data.employees[firstExcessShift.empId] : null;
+      const excessIdsCsv = unreviewedExcessShifts.map((s) => s.id).join(",");
 
       return `
         <div class="flex-1 flex flex-col p-2.5 gap-2 min-h-0">
-          <!-- Cabecera superior: Empleadas y Mes / Pago junto a la rueda de ajustes -->
-          <header class="hc-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2 shrink-0">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"} shrink-0"></span>
-              <div class="truncate">
-                <span class="text-xs font-extrabold text-slate-900">${escapeHtml(ownerLabel)}</span>
-                <span class="text-[10px] text-sky-700 font-extrabold ml-1">${escapeHtml(state.homeCode)}</span>
-              </div>
+          <!-- Cabecera superior: F de Fran + Empleadas + Mes / Pago + Rueda + Salir -->
+          <header class="hc-card rounded-2xl px-2.5 py-2 flex items-center justify-between gap-1.5 shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"}"></span>
+              <span title="${escapeHtml(getCurrentOwnerLabel())}" class="w-7 h-7 rounded-xl bg-sky-100 border border-sky-200 text-sky-900 text-xs font-extrabold flex items-center justify-center">
+                ${escapeHtml(badgeLetter)}
+              </span>
             </div>
 
             <div class="flex items-center gap-1.5 shrink-0">
@@ -1358,16 +1382,22 @@
             </div>
           </header>
 
-          <!-- Aviso +1h con botón Revisar que lleva al turno y desaparece al revisar -->
+          <!-- Aviso +1h con Revisar y OK para cerrarlo -->
           ${firstExcessShift ? `
             <div class="rounded-2xl bg-amber-100 border border-amber-400 px-3 py-2 text-xs text-amber-950 font-bold flex items-center justify-between gap-2 shrink-0">
-              <div class="min-w-0">
-                ⚠️ Exceso (+1h sobre ficha): ${unreviewedExcessShifts.length} turno(s) por revisar.
+              <div class="min-w-0 leading-snug">
+                ⚠️ +1h sobre ficha: <span>${escapeHtml(firstExcessEmp?.name || "")}</span> (${msToHoursMinutes(firstExcessShift.endTs - firstExcessShift.startTs).text})
               </div>
-              <button id="btn-review-excess" data-shiftid="${firstExcessShift.id}" type="button"
-                class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold shrink-0 shadow-2xs">
-                Revisar
-              </button>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button id="btn-review-excess" data-shiftid="${firstExcessShift.id}" type="button"
+                  class="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold">
+                  Revisar
+                </button>
+                <button id="btn-ok-excess" data-shiftids="${escapeHtml(excessIdsCsv)}" type="button"
+                  class="px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-400 text-amber-950 text-xs font-extrabold">
+                  OK
+                </button>
+              </div>
             </div>
           ` : ""}
 
@@ -1427,34 +1457,52 @@
         .sort((a, b) => b.startTs - a.startTs);
 
       return `
-        <div class="split-pane flex flex-col gap-2.5">
-          <section class="hc-card rounded-3xl p-3.5 space-y-2.5">
-            <div class="text-xs font-extrabold text-amber-800 uppercase tracking-wider">Pendientes de confirmar (${pendingShifts.length})</div>
-            ${pendingShifts.length === 0 ? `
-              <div class="text-xs text-slate-500 py-1">No hay turnos pendientes de confirmar.</div>
-            ` : pendingShifts.map((s) => {
-              const emp = state.data.employees[s.empId];
-              const dur = msToHoursMinutes((s.endTs || Date.now()) - s.startTs);
-              const rate = getRateForDate(emp, s.date);
-              const eur = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
-              return `
-                <div class="rounded-2xl bg-amber-50 border border-amber-300 p-3 flex items-center justify-between gap-2">
-                  <div class="min-w-0">
-                    <div class="text-xs font-extrabold text-slate-900 truncate">${escapeHtml(emp?.name || "")} · ${s.date}</div>
-                    <div class="text-xs text-amber-900 font-semibold">${formatTimeHM(s.startTs)} – ${formatTimeHM(s.endTs)} (${dur.text} · ${eur})</div>
-                  </div>
-                  <div class="flex gap-1.5 shrink-0">
-                    <button data-editshift="${s.id}" type="button" class="btn-edit-shift px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-sky-700">Ajustar</button>
-                    <button data-confirmshift="${s.id}" type="button" class="btn-confirm-shift px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Confirmar</button>
-                  </div>
-                </div>
-              `;
-            }).join("")}
+        <div class="flex-1 flex flex-col gap-2.5 min-h-0">
+          ${employees.length > 0 ? `
+            <div class="hc-card rounded-2xl px-3 py-2 flex items-center gap-2 shrink-0">
+              <span class="text-xs font-bold text-slate-600 shrink-0">Empleada:</span>
+              <select id="owner-cal-emp" class="flex-1 min-w-0 rounded-xl bg-slate-50 border border-slate-300 px-3 py-1.5 text-xs text-slate-900 font-extrabold">
+                ${employees.map((e) => `<option value="${e.id}" ${e.id === calEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
+              </select>
+            </div>
+          ` : ""}
 
-            <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider pt-2 border-t border-slate-200">Turnos recientes</div>
-            <div class="space-y-1.5 max-h-60 overflow-y-auto no-scrollbar">
-              ${allShifts.slice(0, 12).map((s) => {
+          <section class="hc-card rounded-3xl p-3.5 flex-1 flex flex-col gap-2.5 min-h-0">
+            <div class="text-xs font-extrabold text-amber-800 uppercase tracking-wider shrink-0">Pendientes de confirmar (${pendingShifts.length})</div>
+            ${pendingShifts.length > 0 ? `
+              <div class="space-y-2 shrink-0">
+                ${pendingShifts.map((s) => {
+                  const emp = state.data.employees[s.empId];
+                  const dur = msToHoursMinutes((s.endTs || Date.now()) - s.startTs);
+                  const rate = getRateForDate(emp, s.date);
+                  const eur = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
+                  return `
+                    <div class="rounded-2xl bg-amber-50 border border-amber-300 p-3 flex items-center justify-between gap-2">
+                      <div class="min-w-0">
+                        <div class="text-xs font-extrabold text-slate-900 truncate">${escapeHtml(emp?.name || "")} · ${s.date}</div>
+                        <div class="text-xs text-amber-900 font-semibold">${formatTimeHM(s.startTs)} – ${formatTimeHM(s.endTs)} (${dur.text} · ${eur})</div>
+                      </div>
+                      <div class="flex gap-1.5 shrink-0">
+                        <button data-editshift="${s.id}" type="button" class="btn-edit-shift px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-sky-700">Ajustar</button>
+                        <button data-confirmshift="${s.id}" type="button" class="btn-confirm-shift px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Confirmar</button>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            ` : `
+              <div class="text-xs text-slate-500 shrink-0">No hay turnos pendientes de confirmar.</div>
+            `}
+
+            <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider pt-2 border-t border-slate-200 shrink-0">Turnos recientes</div>
+            <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-2">
+              ${allShifts.length === 0 ? `
+                <div class="text-xs text-slate-500 py-4 text-center">Sin turnos registrados.</div>
+              ` : allShifts.map((s) => {
                 const dur = msToHoursMinutes(getShiftDurationMs(s));
+                const emp = state.data.employees[s.empId];
+                const rate = getRateForDate(emp, s.date);
+                const amount = formatOneDecimalEuro((dur.totalMinutes / 60) * rate);
                 const badgeClass =
                   s.status === "confirmed"
                     ? "bg-emerald-100 text-emerald-800 border-emerald-300"
@@ -1463,14 +1511,15 @@
                     : "bg-sky-100 text-sky-800 border-sky-300";
                 const actorTag = s.confirmedBy ? ` · ${s.confirmedBy}` : s.adjustedBy ? ` · ${s.adjustedBy}` : "";
                 return `
-                  <div class="rounded-2xl bg-slate-50 border border-slate-200 p-2.5 flex items-center justify-between gap-2">
+                  <div class="rounded-2xl bg-slate-50 border border-slate-200 p-3 flex items-center justify-between gap-2">
                     <div class="min-w-0">
-                      <div class="text-xs font-bold text-slate-900">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"} (${dur.text})</div>
+                      <div class="text-xs font-extrabold text-slate-900">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"}</div>
+                      <div class="text-[11px] text-slate-600 font-semibold mt-0.5">${dur.text} · ${amount}</div>
                       <span class="inline-block mt-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${badgeClass}">${s.status.toUpperCase()}${escapeHtml(actorTag)}</span>
                     </div>
                     <div class="flex gap-1.5 shrink-0">
-                      ${s.status === "pending" ? `<button data-confirmshift="${s.id}" type="button" class="btn-confirm-shift px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Confirmar</button>` : ""}
-                      ${s.status !== "open" ? `<button data-editshift="${s.id}" type="button" class="btn-edit-shift px-2.5 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-sky-700">Editar</button>` : ""}
+                      ${s.status === "pending" ? `<button data-confirmshift="${s.id}" type="button" class="btn-confirm-shift px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Confirmar</button>` : ""}
+                      ${s.status !== "open" ? `<button data-editshift="${s.id}" type="button" class="btn-edit-shift px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-sky-700">Editar</button>` : ""}
                     </div>
                   </div>
                 `;
@@ -1551,13 +1600,17 @@
 
     function renderOwnerTasksTab(employees) {
       const tasks = Object.values(state.data.tasks || {}).sort((a, b) => b.createdAt - a.createdAt);
+      const defaultEmpName = employees[0]?.name || "";
       return `
         <div class="split-pane flex flex-col gap-2.5">
           <section class="hc-card rounded-3xl p-3.5 space-y-2.5">
             <div class="text-xs font-extrabold text-sky-800 uppercase tracking-wider">Asignar tarea especial</div>
-            <select id="task-emp-select" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2.5 text-xs text-slate-900 font-semibold">
-              ${employees.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("")}
+            <select id="task-emp-select" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-3 text-base text-slate-900 font-extrabold">
+              ${employees.map((e) => `<option value="${e.id}" data-empname="${escapeHtml(e.name)}">${escapeHtml(e.name)}</option>`).join("")}
             </select>
+            <div id="task-emp-badge" class="px-3.5 py-2 rounded-2xl bg-sky-50 border border-sky-200 text-base font-extrabold text-sky-900">
+              ${escapeHtml(defaultEmpName)}
+            </div>
             <input id="task-title-input" type="text" placeholder="Ej: Limpiar hornos o cambiar sábanas" class="w-full rounded-2xl bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900" />
             <div class="flex items-center gap-2">
               <input id="task-date-input" type="date" value="${toDateStr(Date.now())}" class="flex-1 min-w-0 rounded-2xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900" />
@@ -1574,7 +1627,7 @@
                 <div class="rounded-2xl bg-slate-50 border border-slate-200 p-2.5 flex items-center justify-between gap-2">
                   <div class="min-w-0">
                     <div class="text-xs ${t.done ? "line-through text-slate-400" : "text-slate-900 font-bold"} truncate">${escapeHtml(t.title)}</div>
-                    <div class="text-[11px] text-slate-500">${escapeHtml(emp?.name || "")} · ${t.date} · ${t.done ? "Hecha" : "Pendiente"}</div>
+                    <div class="text-xs text-slate-700 font-extrabold">${escapeHtml(emp?.name || "")} · <span class="font-medium text-slate-500">${t.date} · ${t.done ? "Hecha" : "Pendiente"}</span></div>
                   </div>
                   <button data-deltask="${t.id}" type="button" class="btn-del-task px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">Borrar</button>
                 </div>
@@ -1633,6 +1686,14 @@
         };
       }
 
+      const okExcessBtn = document.getElementById("btn-ok-excess");
+      if (okExcessBtn) {
+        okExcessBtn.onclick = async () => {
+          const ids = (okExcessBtn.dataset.shiftids || "").split(",").filter(Boolean);
+          await acknowledgeExcessShifts(ids);
+        };
+      }
+
       document.querySelectorAll(".o-tab").forEach((btn) => {
         btn.onclick = () => {
           state.ownerSubTab = btn.dataset.otab;
@@ -1656,7 +1717,9 @@
           state.ownerCalEmpId = calEmpSel.value;
           render();
         };
-        bindCalendarAndPaymentsControls(calEmpSel.value, true);
+        if (state.ownerSubTab === "closures") {
+          bindCalendarAndPaymentsControls(calEmpSel.value, true);
+        }
       }
 
       const btnAddOwnerName = document.getElementById("btn-add-owner-name");
@@ -1737,6 +1800,17 @@
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
+      }
+
+      const taskEmpSelect = document.getElementById("task-emp-select");
+      const taskEmpBadge = document.getElementById("task-emp-badge");
+      if (taskEmpSelect && taskEmpBadge) {
+        const updateTaskEmpBadge = () => {
+          const emp = state.data.employees[taskEmpSelect.value];
+          taskEmpBadge.textContent = emp ? emp.name : "";
+        };
+        updateTaskEmpBadge();
+        taskEmpSelect.onchange = updateTaskEmpBadge;
       }
 
       const btnToday = document.getElementById("btn-task-today");

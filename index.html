@@ -77,6 +77,7 @@
       meta: {
         createdAt: Date.now(),
         masterPasswordHash: null,
+        ownerNames: [],
         updatedAt: Date.now()
       },
       employees: {},
@@ -91,11 +92,13 @@
     // =========================================================================
     const urlParams = new URLSearchParams(window.location.search);
     const initialCode = (urlParams.get("hogar") || localStorage.getItem("hc_last_home") || "").trim().toUpperCase();
+    const savedOwnerName = (localStorage.getItem("hc_owner_name") || "").trim();
 
     const state = {
       homeCode: initialCode,
       role: null,              // 'owner' | 'employee' | null
       isMaster: false,
+      ownerName: savedOwnerName,
       activeEmpId: null,
       ownerSubTab: "shifts",   // 'shifts' | 'employees' | 'tasks' | 'closures' | 'chat'
       ownerChatEmpId: null,
@@ -153,6 +156,25 @@
       const val = Number(amount) || 0;
       const str = Number.isInteger(val * 100) ? val.toFixed(2) : String(Number(val.toFixed(4)));
       return `${str.replace(".", ",")} €`;
+    }
+
+    function getCurrentOwnerLabel() {
+      const clean = (state.ownerName || "").trim();
+      if (clean) return clean;
+      return state.isMaster ? "Propietario 1" : "Propietario";
+    }
+
+    function registerOwnerName(name) {
+      const clean = (name || "").trim();
+      if (!clean) return;
+      state.ownerName = clean;
+      localStorage.setItem("hc_owner_name", clean);
+      state.data.meta = state.data.meta || {};
+      const list = Array.isArray(state.data.meta.ownerNames) ? [...state.data.meta.ownerNames] : [];
+      if (!list.some((n) => n.toLowerCase() === clean.toLowerCase())) {
+        list.push(clean);
+      }
+      state.data.meta.ownerNames = list;
     }
 
     function getRateForDate(emp, dateStr) {
@@ -321,7 +343,7 @@
       const base = DEFAULT_HOME_DATA();
       if (!raw || typeof raw !== "object") return base;
       return {
-        meta: { ...base.meta, ...(raw.meta || {}) },
+        meta: { ...base.meta, ...(raw.meta || {}), ownerNames: Array.isArray(raw.meta?.ownerNames) ? raw.meta.ownerNames : [] },
         employees: raw.employees && typeof raw.employees === "object" ? raw.employees : {},
         shifts: raw.shifts && typeof raw.shifts === "object" ? raw.shifts : {},
         tasks: raw.tasks && typeof raw.tasks === "object" ? raw.tasks : {},
@@ -479,6 +501,7 @@
           status: "open",
           confirmedBy: null,
           confirmedAt: null,
+          adjustedBy: null,
           adjustedAt: null,
           excessNotified: false
         };
@@ -518,7 +541,7 @@
           openShift.excessNotified = true;
         }
 
-        const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación del propietario.`;
+        const baseMsg = `Salida fichada a las ${formatTimeHM(safeEnd)} (${dur.text}). Pendiente de confirmación.`;
         const alertMsg = exceedsOneHour
           ? ` ⚠️ EXCESO (+1h sobre ficha de ${emp.dailyHours}h): revisar y ajustar hora real de salida.`
           : "";
@@ -537,9 +560,10 @@
       const shift = state.data.shifts[shiftId];
       if (!shift || !shift.endTs) return;
       const emp = state.data.employees[shift.empId];
+      const actor = getCurrentOwnerLabel();
       shift.status = "confirmed";
       shift.confirmedAt = Date.now();
-      shift.confirmedBy = state.isMaster ? "Propietario Máster" : "Propietario";
+      shift.confirmedBy = actor;
 
       const dur = msToHoursMinutes(shift.endTs - shift.startTs);
       const rate = getRateForDate(emp, shift.date);
@@ -548,8 +572,8 @@
       await appendChatMessage(
         shift.empId,
         "owner",
-        shift.confirmedBy,
-        `Turno confirmado (${formatDateShort(shift.date)} ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text} · ${exactEur}). Calendario actualizado.`,
+        actor,
+        `${actor} ha confirmado el turno (${formatDateShort(shift.date)} ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text} · ${exactEur}). Calendario actualizado.`,
         "system"
       );
     }
@@ -557,6 +581,7 @@
     async function saveAdjustedShift(shiftId, newStartStr, newEndStr, alsoConfirm) {
       const shift = state.data.shifts[shiftId];
       if (!shift) return;
+      const actor = getCurrentOwnerLabel();
       const [y, m, d] = shift.date.split("-").map(Number);
 
       const [sh, sm] = newStartStr.split(":").map(Number);
@@ -570,24 +595,24 @@
 
       shift.startTs = startDate.getTime();
       shift.endTs = endDate.getTime();
+      shift.adjustedBy = actor;
       shift.adjustedAt = Date.now();
       if (alsoConfirm) {
         shift.status = "confirmed";
         shift.confirmedAt = Date.now();
-        shift.confirmedBy = state.isMaster ? "Propietario Máster" : "Propietario";
+        shift.confirmedBy = actor;
       } else if (shift.status === "open") {
         shift.status = "pending";
       }
 
       const dur = msToHoursMinutes(shift.endTs - shift.startTs);
-      const actor = state.isMaster ? "Propietario Máster" : "Propietario";
-      const statusLabel = shift.status === "confirmed" ? "CONFIRMADO" : "PENDIENTE DE CONFIRMAR";
+      const statusText = shift.status === "confirmed" ? "CONFIRMADO" : "PENDIENTE DE CONFIRMAR";
 
       await appendChatMessage(
         shift.empId,
         "owner",
         actor,
-        `Turno ajustado (${formatDateShort(shift.date)}: ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text}) · Estado: ${statusLabel}.`,
+        `${actor} ha ajustado el turno (${formatDateShort(shift.date)}: ${formatTimeHM(shift.startTs)}–${formatTimeHM(shift.endTs)}, ${dur.text}) · ${statusText}.`,
         "system"
       );
     }
@@ -618,7 +643,7 @@
       openModal(`
         <div class="text-sm font-extrabold text-amber-700 mb-1">Confirmar fichaje de salida</div>
         <p class="text-xs text-slate-600 mb-3">
-          Vas a cerrar la entrada de las <strong class="text-slate-900">${formatTimeHM(openShift.startTs)}</strong> (tiempo actual: <strong class="text-slate-900">${elapsed}</strong>). Quedará pendiente de confirmación del propietario.
+          Vas a cerrar la entrada de las <strong class="text-slate-900">${formatTimeHM(openShift.startTs)}</strong> (tiempo actual: <strong class="text-slate-900">${elapsed}</strong>). Quedará pendiente de confirmación.
         </p>
         <div class="flex gap-2 justify-end">
           <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
@@ -643,7 +668,7 @@
           <div class="text-sm font-extrabold text-sky-700">Ajustar turno · ${escapeHtml(emp?.name || "")}</div>
           <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
         </div>
-        <div class="text-[11px] text-slate-500 mb-3">Fecha: <span class="text-slate-800 font-bold">${shift.date}</span></div>
+        <div class="text-[11px] text-slate-500 mb-3">Fecha: <span class="text-slate-800 font-bold">${shift.date}</span> · Como: <span class="text-sky-700 font-bold">${escapeHtml(getCurrentOwnerLabel())}</span></div>
         <div class="grid grid-cols-2 gap-2.5 mb-3">
           <div>
             <label class="block text-[11px] text-slate-600 mb-1 font-semibold">Hora entrada</label>
@@ -681,7 +706,7 @@
           <div class="text-sm font-extrabold text-sky-700">Código y enlace del hogar</div>
           <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
         </div>
-        <p class="text-xs text-slate-600 mb-2">Comparte este código o enlace para vincular otros propietarios o empleadas:</p>
+        <p class="text-xs text-slate-600 mb-2">Comparte este código o enlace para vincular otros propietarios (ej. Fran, Cris) o empleadas:</p>
         <div class="rounded-xl bg-slate-100 border border-slate-200 p-2.5 mb-2">
           <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Código de hogar</div>
           <div class="text-base font-extrabold text-sky-700 tracking-wider">${escapeHtml(state.homeCode)}</div>
@@ -753,6 +778,7 @@
       const existingHome = state.homeCode ? loadLocal(state.homeCode) || state.data : null;
       const hasMasterPass = Boolean(existingHome?.meta?.masterPasswordHash);
       const empList = Object.values(existingHome?.employees || {});
+      const knownOwners = Array.isArray(existingHome?.meta?.ownerNames) ? existingHome.meta.ownerNames : [];
 
       return `
         <div class="flex-1 flex flex-col justify-between p-4 gap-3">
@@ -796,6 +822,20 @@
               <div class="text-xs font-extrabold text-slate-800 mb-2">
                 ${hasMasterPass ? "Acceso Propietario / Edición" : "Configurar Hogar Nuevo (Propietario 1 Máster)"}
               </div>
+
+              ${knownOwners.length > 0 ? `
+                <div class="flex flex-wrap gap-1.5 mb-2">
+                  ${knownOwners.map((n) => `
+                    <button type="button" data-quickowner="${escapeHtml(n)}" class="quick-owner-chip px-2.5 py-1 rounded-full text-[11px] font-bold border ${state.ownerName.toLowerCase() === n.toLowerCase() ? "bg-sky-600 text-white border-sky-600" : "bg-slate-100 text-slate-700 border-slate-200"}">
+                      ${escapeHtml(n)}
+                    </button>
+                  `).join("")}
+                </div>
+              ` : ""}
+
+              <input id="owner-name-input" type="text" value="${escapeHtml(state.ownerName)}" placeholder="Tu nombre (ej: Fran, Cris, Propietario 1...)"
+                class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 font-semibold mb-2 focus:outline-none focus:border-sky-500" />
+
               <input id="owner-pass-input" type="password" placeholder="${hasMasterPass ? "Contraseña máster del hogar" : "Crea una contraseña máster"}"
                 class="w-full rounded-xl bg-slate-50 border border-slate-300 px-3 py-2 text-xs text-slate-900 mb-2.5 focus:outline-none focus:border-sky-500" />
               <div class="flex items-center justify-between gap-2">
@@ -842,6 +882,17 @@
         render();
       };
 
+      document.querySelectorAll(".quick-owner-chip").forEach((chip) => {
+        chip.onclick = () => {
+          const picked = chip.dataset.quickowner || "";
+          state.ownerName = picked;
+          localStorage.setItem("hc_owner_name", picked);
+          const input = document.getElementById("owner-name-input");
+          if (input) input.value = picked;
+          render();
+        };
+      });
+
       document.getElementById("btn-load-home").onclick = async () => {
         const code = document.getElementById("access-home-code").value.trim().toUpperCase();
         if (!code) return;
@@ -854,12 +905,18 @@
 
       document.getElementById("btn-enter-owner").onclick = async () => {
         const code = document.getElementById("access-home-code").value.trim().toUpperCase();
+        const chosenName = document.getElementById("owner-name-input").value.trim();
         const pass = document.getElementById("owner-pass-input").value;
         const isMasterChecked = document.getElementById("owner-master-check").checked;
         const errEl = document.getElementById("owner-auth-err");
 
         if (!code) {
           errEl.textContent = "Introduce un código de hogar.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+        if (!chosenName) {
+          errEl.textContent = "Pon tu nombre (ej. Fran o Cris) para identificarte.";
           errEl.classList.remove("hidden");
           return;
         }
@@ -877,6 +934,7 @@
         const existingHash = state.data.meta?.masterPasswordHash;
         if (!existingHash) {
           state.data.meta.masterPasswordHash = btoa(unescape(encodeURIComponent(pass)));
+          registerOwnerName(chosenName);
           await pushToFirebase(code, state.data);
         } else {
           const inputHash = btoa(unescape(encodeURIComponent(pass)));
@@ -885,6 +943,8 @@
             errEl.classList.remove("hidden");
             return;
           }
+          registerOwnerName(chosenName);
+          await pushToFirebase(code, state.data);
         }
 
         state.role = "owner";
@@ -1101,6 +1161,7 @@
       });
 
       const anyChatBlink = Object.values(state.blinkingChat || {}).some(Boolean);
+      const ownerLabel = getCurrentOwnerLabel();
 
       return `
         <div class="flex-1 flex flex-col p-2.5 gap-2">
@@ -1108,11 +1169,12 @@
             <div class="flex items-center gap-2 min-w-0">
               <span class="w-2.5 h-2.5 rounded-full ${state.syncStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"} shrink-0"></span>
               <div class="truncate">
-                <span class="text-xs font-extrabold text-slate-900">${state.isMaster ? "Propietario Máster" : "Propietario"}</span>
+                <span class="text-xs font-extrabold text-slate-900">${escapeHtml(ownerLabel)}</span>
                 <span class="text-[10px] text-sky-700 font-extrabold ml-1">${escapeHtml(state.homeCode)}</span>
               </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
+              <button id="owner-rename-btn" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">Nombre</button>
               <button id="owner-share-btn" class="px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 text-[10px] font-bold text-sky-700">Enlace</button>
               <button id="owner-toggle-tablet" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
                 ${state.tabletMode ? "Móvil" : "Tablet"}
@@ -1197,11 +1259,12 @@
                     : s.status === "pending"
                     ? "bg-amber-100 text-amber-900 border-amber-300"
                     : "bg-sky-100 text-sky-800 border-sky-300";
+                const actorTag = s.confirmedBy ? ` · ${s.confirmedBy}` : s.adjustedBy ? ` · ${s.adjustedBy}` : "";
                 return `
                   <div class="rounded-xl bg-slate-50 border border-slate-200 p-2 flex items-center justify-between gap-2">
                     <div class="min-w-0">
                       <div class="text-[11px] font-bold text-slate-900">${s.date} · ${formatTimeHM(s.startTs)}–${s.endTs ? formatTimeHM(s.endTs) : "en curso"} (${dur.text})</div>
-                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${badgeClass}">${s.status.toUpperCase()}</span>
+                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${badgeClass}">${s.status.toUpperCase()}${escapeHtml(actorTag)}</span>
                     </div>
                     <div class="flex gap-1 shrink-0">
                       ${s.status === "pending" ? `<button data-confirmshift="${s.id}" class="btn-confirm-shift px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold">Confirmar</button>` : ""}
@@ -1233,6 +1296,7 @@
     }
 
     function renderOwnerEmployeesTab(employees) {
+      const knownOwners = Array.isArray(state.data.meta?.ownerNames) ? state.data.meta.ownerNames : [];
       return `
         <div class="split-pane flex flex-col gap-2">
           <section class="light-card rounded-2xl p-3 space-y-2">
@@ -1250,6 +1314,17 @@
               </div>
             </div>
             <button id="btn-add-emp" class="w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">Añadir empleada</button>
+
+            <div class="pt-2 border-t border-slate-200 space-y-1.5">
+              <div class="text-[11px] font-extrabold text-slate-800">Propietarios del hogar (${knownOwners.length})</div>
+              <div class="flex flex-wrap gap-1.5">
+                ${knownOwners.map((n) => `<span class="px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-[11px] font-bold text-sky-800">${escapeHtml(n)}</span>`).join("")}
+              </div>
+              <div class="flex gap-1.5">
+                <input id="add-owner-name-input" type="text" placeholder="Añadir nombre (ej: Cris)" class="flex-1 rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900" />
+                <button id="btn-add-owner-name" type="button" class="px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-extrabold">Añadir</button>
+              </div>
+            </div>
           </section>
 
           <section class="light-card rounded-2xl p-3 space-y-2">
@@ -1387,13 +1462,49 @@
                 `;
               }).join("")}
             </div>
-            ${selectedId ? renderChatView(selectedId, "owner", state.isMaster ? "Propietario Máster" : "Propietario") : ""}
+            ${selectedId ? renderChatView(selectedId, "owner", getCurrentOwnerLabel()) : ""}
           ` : `<div class="light-card rounded-2xl p-4 text-xs text-slate-500">Crea una empleada para usar su chat.</div>`}
         </div>
       `;
     }
 
     function bindOwnerScreen() {
+      document.getElementById("owner-rename-btn").onclick = () => {
+        const knownOwners = Array.isArray(state.data.meta?.ownerNames) ? state.data.meta.ownerNames : [];
+        openModal(`
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-extrabold text-sky-700">Nombre de propietario</div>
+            <button onclick="closeModal()" class="text-slate-500 text-xs px-2 py-1">✕</button>
+          </div>
+          ${knownOwners.length > 0 ? `
+            <div class="flex flex-wrap gap-1.5 mb-2.5">
+              ${knownOwners.map((n) => `
+                <button type="button" data-pickname="${escapeHtml(n)}" class="modal-pick-owner px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800">${escapeHtml(n)}</button>
+              `).join("")}
+            </div>
+          ` : ""}
+          <input id="modal-owner-name" type="text" value="${escapeHtml(getCurrentOwnerLabel())}" placeholder="Ej: Fran o Cris" class="w-full rounded-xl bg-slate-100 border border-slate-300 px-3 py-2 text-xs text-slate-900 font-semibold mb-3" />
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-3 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold">Cancelar</button>
+            <button id="btn-save-owner-name" class="px-3.5 py-2 rounded-xl bg-sky-600 text-white text-xs font-extrabold">Guardar</button>
+          </div>
+        `);
+        document.querySelectorAll(".modal-pick-owner").forEach((b) => {
+          b.onclick = () => {
+            document.getElementById("modal-owner-name").value = b.dataset.pickname;
+          };
+        });
+        document.getElementById("btn-save-owner-name").onclick = async () => {
+          const val = document.getElementById("modal-owner-name").value.trim();
+          if (!val) return;
+          registerOwnerName(val);
+          closeModal();
+          saveLocal(state.homeCode, state.data);
+          render();
+          await pushToFirebase(state.homeCode, state.data);
+        };
+      };
+
       document.getElementById("owner-toggle-tablet").onclick = () => {
         state.tabletMode = !state.tabletMode;
         localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
@@ -1430,6 +1541,20 @@
           render();
         };
         bindCalendarControls(calEmpSel.value, true);
+      }
+
+      const btnAddOwnerName = document.getElementById("btn-add-owner-name");
+      if (btnAddOwnerName) {
+        btnAddOwnerName.onclick = async () => {
+          const input = document.getElementById("add-owner-name-input");
+          const val = input.value.trim();
+          if (!val) return;
+          registerOwnerName(val);
+          input.value = "";
+          saveLocal(state.homeCode, state.data);
+          render();
+          await pushToFirebase(state.homeCode, state.data);
+        };
       }
 
       const btnAddEmp = document.getElementById("btn-add-emp");
@@ -1561,7 +1686,7 @@
         };
       });
       if (state.ownerSubTab === "chat" && state.ownerChatEmpId) {
-        bindChatControls(state.ownerChatEmpId, "owner", state.isMaster ? "Propietario Máster" : "Propietario");
+        bindChatControls(state.ownerChatEmpId, "owner", getCurrentOwnerLabel());
       }
     }
 
@@ -1650,11 +1775,12 @@
           if (dayShifts.length === 0) return;
           const rows = dayShifts.map((s) => {
             const dur = msToHoursMinutes(getShiftDurationMs(s));
+            const byText = s.confirmedBy ? ` · Confirmado por ${s.confirmedBy}` : s.adjustedBy ? ` · Ajustado por ${s.adjustedBy}` : "";
             return `
               <div class="p-2 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-between gap-2 text-xs">
                 <div>
                   <div class="font-bold text-slate-900">${formatTimeHM(s.startTs)} – ${s.endTs ? formatTimeHM(s.endTs) : "En curso"} (${dur.text})</div>
-                  <div class="text-[10px] text-slate-500 font-bold uppercase">${s.status}</div>
+                  <div class="text-[10px] text-slate-500 font-bold uppercase">${s.status}${escapeHtml(byText)}</div>
                 </div>
                 ${isOwnerView && s.status !== "open" ? `
                   <button onclick="closeModal(); openShiftEditorModal('${s.id}')" class="px-2 py-1 rounded-lg bg-sky-600 text-white text-[10px] font-extrabold">Ajustar</button>
@@ -1683,7 +1809,7 @@
       return `
         <section class="light-card rounded-2xl p-2.5 flex-1 flex flex-col justify-between gap-2 ${blinking ? "chat-alert-blink" : ""}">
           <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
-            <span class="text-xs font-extrabold text-amber-800">Chat en tiempo real</span>
+            <span class="text-xs font-extrabold text-amber-800">Chat en tiempo real (${escapeHtml(senderName)})</span>
             <button id="btn-mute-sound" type="button" class="px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
               ${state.soundMuted ? "🔇 Silenciado" : "🔊 Sonido ON"}
             </button>
@@ -1693,7 +1819,7 @@
             ${msgs.length === 0 ? `
               <div class="text-center text-xs text-slate-400 py-8">Sin mensajes todavía. Escribe algo o ficha un turno.</div>
             ` : msgs.map((m) => {
-              const isMine = m.senderRole === role;
+              const isMine = m.senderRole === role && m.senderName === senderName;
               const isSystem = m.kind === "system";
               return `
                 <div class="flex flex-col ${isMine ? "items-end" : "items-start"}">

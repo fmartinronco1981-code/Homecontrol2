@@ -948,7 +948,7 @@
   </style>
 </head>
 <body>
-  <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden"></div>
 
   <!-- PANTALLA DE ACCESO -->
   <div id="loginScreen" class="app-shell">
@@ -1898,7 +1898,7 @@
                   renderEmployeeScreen();
                 }
               };
-            });
+                         });
           }
         } else if (sess.empTab === "cal") {
           renderCalendarGridAndKpis(emp.id, empCalDate, "empMonthTitle", "empKpis", "empCalGrid", null, null);
@@ -2847,8 +2847,8 @@
               <button type="button" class="btn-blue btn-sm" id="mCreateHomeConfirm">Crear en Firebase</button>
             </div>
           </div>
-        `;
-        bg.classList.remove("hidden");
+        `; 
+              bg.classList.remove("hidden");
 
         document.getElementById("mCreateHomeCancel").onclick = () => bg.classList.add("hidden");
 

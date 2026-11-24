@@ -383,6 +383,185 @@
       }
     }
 
+    /* Vista propietario: Turnos (Izquierda turnos, Derecha calendario) y Mes/Pago (Izquierda calendario, Derecha cierre) */
+    .owner-shifts-layout,
+    .owner-pay-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    body.tablet-mode .owner-shifts-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+      align-items: start;
+    }
+
+    body.tablet-mode .owner-pay-layout {
+      grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+      align-items: start;
+    }
+
+    @media (min-width: 760px) and (orientation: landscape) {
+      .owner-shifts-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+        align-items: start;
+      }
+      .owner-pay-layout {
+        grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+        align-items: start;
+      }
+    }
+
+    /* Compactación vertical en tablet / apaisado para ver el mes entero sin scroll vertical */
+    body.tablet-mode .app-shell {
+      padding-top: 8px;
+      padding-bottom: 68px;
+      gap: 8px;
+    }
+
+    body.tablet-mode .cal-card {
+      padding: 10px 12px;
+    }
+    body.tablet-mode .cal-card .card-title {
+      margin-bottom: 4px;
+      font-size: 14.5px;
+    }
+    body.tablet-mode .cal-card .cal-legend {
+      margin-bottom: 5px;
+      gap: 6px;
+      font-size: 11px;
+    }
+    body.tablet-mode .cal-card .cal-legend .badge {
+      padding: 2px 7px;
+      font-size: 10px;
+    }
+    body.tablet-mode .cal-card .cal-nav {
+      padding: 3px 8px;
+      margin-bottom: 6px;
+    }
+    body.tablet-mode .cal-card .cal-nav .btn-sm {
+      min-height: 28px;
+      padding: 2px 9px;
+    }
+    body.tablet-mode .cal-card .kpi-2x2 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      margin-bottom: 6px;
+    }
+    body.tablet-mode .cal-card .kpi-box {
+      padding: 5px 6px;
+      border-radius: 9px;
+    }
+    body.tablet-mode .cal-card .kpi-box .lbl {
+      font-size: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    body.tablet-mode .cal-card .kpi-box .val {
+      font-size: 13px;
+      margin-top: 1px;
+    }
+    body.tablet-mode .cal-card .cal-dow {
+      margin-bottom: 3px;
+      gap: 3px;
+      font-size: 11px;
+    }
+    body.tablet-mode .cal-card .cal-days {
+      gap: 3px;
+    }
+    body.tablet-mode .cal-card .cal-cell {
+      min-height: 36px;
+      padding: 2px 2px;
+      border-radius: 7px;
+    }
+    body.tablet-mode .cal-card .cal-num {
+      font-size: 11.5px;
+      line-height: 1.05;
+    }
+    body.tablet-mode .cal-card .cal-sub {
+      font-size: 8.5px;
+      line-height: 1;
+    }
+
+    @media (min-width: 760px) and (orientation: landscape) {
+      .app-shell {
+        padding-top: 8px;
+        padding-bottom: 68px;
+        gap: 8px;
+      }
+      .session-bar {
+        padding: 7px 12px;
+      }
+      #ownerEmpSelectorCard {
+        padding: 7px 12px;
+      }
+      .cal-card {
+        padding: 10px 12px;
+      }
+      .cal-card .card-title {
+        margin-bottom: 4px;
+        font-size: 14.5px;
+      }
+      .cal-card .cal-legend {
+        margin-bottom: 5px;
+        gap: 6px;
+        font-size: 11px;
+      }
+      .cal-card .cal-legend .badge {
+        padding: 2px 7px;
+        font-size: 10px;
+      }
+      .cal-card .cal-nav {
+        padding: 3px 8px;
+        margin-bottom: 6px;
+      }
+      .cal-card .cal-nav .btn-sm {
+        min-height: 28px;
+        padding: 2px 9px;
+      }
+      .cal-card .kpi-2x2 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+      .cal-card .kpi-box {
+        padding: 5px 6px;
+        border-radius: 9px;
+      }
+      .cal-card .kpi-box .lbl {
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cal-card .kpi-box .val {
+        font-size: 13px;
+        margin-top: 1px;
+      }
+      .cal-card .cal-dow {
+        margin-bottom: 3px;
+        gap: 3px;
+        font-size: 11px;
+      }
+      .cal-card .cal-days {
+        gap: 3px;
+      }
+      .cal-card .cal-cell {
+        min-height: 36px;
+        padding: 2px 2px;
+        border-radius: 7px;
+      }
+      .cal-card .cal-num {
+        font-size: 11.5px;
+        line-height: 1.05;
+      }
+      .cal-card .cal-sub {
+        font-size: 8.5px;
+        line-height: 1;
+      }
+    }
+
     .chrono-top {
       display: flex;
       justify-content: space-between;
@@ -432,9 +611,9 @@
     .cal-legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 12px;
-      font-size: 12.5px;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
       font-weight: 700;
     }
 
@@ -446,32 +625,32 @@
       background: var(--surface-soft);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
+      padding: 6px 10px;
+      margin-bottom: 10px;
     }
 
     .kpi-2x2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
     .kpi-box {
       border: 1px solid var(--border);
       background: var(--surface-soft);
-      border-radius: 14px;
-      padding: 12px;
+      border-radius: 12px;
+      padding: 10px;
     }
 
     .kpi-box .lbl {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--muted);
       font-weight: 600;
     }
 
     .kpi-box .val {
-      font-size: 20px;
+      font-size: 17px;
       font-weight: 900;
       margin-top: 2px;
     }
@@ -479,7 +658,7 @@
     .cal-dow, .cal-days {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      gap: 6px;
+      gap: 5px;
     }
 
     .cal-dow {
@@ -491,11 +670,11 @@
     }
 
     .cal-cell {
-      min-height: 58px;
+      min-height: 52px;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       background: var(--surface);
-      padding: 6px 4px;
+      padding: 5px 3px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -523,13 +702,18 @@
       border-color: #7dd3fc;
     }
 
+    .cal-cell.is-selected-day {
+      outline: 2px solid var(--blue);
+      outline-offset: -1px;
+    }
+
     .cal-num {
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 800;
     }
 
     .cal-sub {
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: 800;
       line-height: 1.1;
       max-width: 100%;
@@ -585,6 +769,26 @@
       border-radius: 999px;
       font-size: 11px;
       font-weight: 800;
+    }
+    .b-over1h {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .over1h-banner {
+      border: 1px solid #f59e0b;
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-sm);
     }
     .b-confirmed { background: var(--green-soft); color: #065f46; }
     .b-pending { background: var(--amber-soft); color: #92400e; }
@@ -766,6 +970,7 @@
       <div class="home-code-row">
         <input type="text" id="homeCodeInput" placeholder="Ej: MARTIN" autocomplete="off" />
         <button type="button" class="btn-soft btn-sm" id="loadHomeBtn">Cargar</button>
+        <button type="button" class="btn-blue btn-sm" id="createHomeBtn">Crear</button>
       </div>
     </div>
 
@@ -813,7 +1018,7 @@
       <button type="button" class="btn-green" id="enterEmpBtn">Entrar a mi espacio</button>
     </div>
 
-    <div class="login-footer">HomeControl · Interfaz visual (sin Firebase aún)</div>
+    <div class="login-footer">HomeControl · Conectado a Firebase Realtime Database</div>
   </div>
 
   <!-- VISTA EMPLEADA -->
@@ -821,13 +1026,15 @@
     <div class="session-bar">
       <div class="session-identity">
         <span class="status-dot"></span>
-        <span id="empTopName">Wendy</span>
+        <span id="empTopName">Yellega</span>
       </div>
       <div class="top-actions">
         <button type="button" class="top-pill view-toggle-btn">Móvil</button>
         <button type="button" class="top-pill exit-pill logout-btn">Salir</button>
       </div>
     </div>
+
+    <div id="empTopAlertBanner" class="over1h-banner hidden"></div>
 
     <!-- Pestaña 1: Fichar / Tareas (Izquierda fichaje, Derecha tareas) -->
     <div id="empViewFichar" class="emp-fichaje-layout">
@@ -854,7 +1061,7 @@
     </div>
 
     <!-- Pestaña 2: Calendario Empleada -->
-    <div id="empViewCal" class="card hidden">
+    <div id="empViewCal" class="card cal-card hidden">
       <div class="cal-legend">
         <span><span class="badge b-active">En curso</span></span>
         <span><span class="badge b-pending">Pendiente</span></span>
@@ -914,6 +1121,8 @@
       </div>
     </div>
 
+    <div id="ownerTopAlertBanner" class="over1h-banner hidden"></div>
+
     <div class="card card-compact" id="ownerEmpSelectorCard">
       <div style="display:flex; align-items:center; gap:10px;">
         <span class="muted" style="font-weight:800; white-space:nowrap;">Empleada:</span>
@@ -925,8 +1134,8 @@
     <div id="ownerTopEmployeesView" class="grid-2 hidden">
       <div class="card stack">
         <div class="section-kicker" style="margin:0;">Nueva empleada</div>
-        <input type="text" id="newEmpName" placeholder="Nombre (ej: Wendy)" />
-        <input type="text" id="newEmpPass" placeholder="Contraseña (por defecto nombre en minúsculas)" />
+        <input type="text" id="newEmpName" placeholder="Nombre (ej: Yellega)" />
+        <input type="text" id="newEmpPass" placeholder="Contraseña (por defecto el mismo nombre)" />
         <div class="grid-2">
           <label class="field-lbl">
             Tarifa €/h
@@ -946,27 +1155,29 @@
       </div>
     </div>
 
-    <div id="ownerTopPayView" class="card hidden">
-      <div class="cal-legend">
-        <span><span class="badge b-active">En curso</span></span>
-        <span><span class="badge b-pending">Pendiente</span></span>
-        <span><span class="badge b-confirmed">Confirmado</span></span>
+    <div id="ownerTopPayView" class="owner-pay-layout hidden">
+      <div class="card cal-card">
+        <div class="cal-legend">
+          <span><span class="badge b-active">En curso</span></span>
+          <span><span class="badge b-pending">Pendiente</span></span>
+          <span><span class="badge b-confirmed">Confirmado</span></span>
+        </div>
+
+        <div class="cal-nav">
+          <button type="button" class="btn-soft btn-sm" id="ownPayPrevMonthBtn">◀</button>
+          <strong id="ownPayMonthTitle">Nov 2026</strong>
+          <button type="button" class="btn-soft btn-sm" id="ownPayNextMonthBtn">▶</button>
+        </div>
+
+        <div class="kpi-2x2" id="ownPayKpis"></div>
+
+        <div class="cal-dow">
+          <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+        </div>
+        <div class="cal-days" id="ownPayCalGrid"></div>
       </div>
 
-      <div class="cal-nav">
-        <button type="button" class="btn-soft btn-sm" id="ownPrevMonthBtn">◀</button>
-        <strong id="ownMonthTitle">Nov 2026</strong>
-        <button type="button" class="btn-soft btn-sm" id="ownNextMonthBtn">▶</button>
-      </div>
-
-      <div class="kpi-2x2" id="ownKpis"></div>
-
-      <div class="cal-dow">
-        <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
-      </div>
-      <div class="cal-days" id="ownCalGrid" style="margin-bottom:14px;"></div>
-
-      <div class="card card-compact stack" style="background:var(--surface-soft);">
+      <div class="card stack">
         <div class="section-kicker" style="margin:0;">Cierre y pago del mes</div>
         <div class="muted" id="ownPaySummaryText">Total confirmado: 0,00 €</div>
         <div class="grid-2">
@@ -984,12 +1195,41 @@
     </div>
 
     <!-- Vistas inferiores (Turnos, Tareas, Chat) -->
-    <div id="ownerBotShiftsView" class="card">
-      <div class="card-title">
-        <span>Turnos de hoy</span>
-        <span class="muted" id="ownerShiftsTotals">Confirmado: 0h 00m · Pendiente: 0h 00m</span>
+    <!-- Turnos: Izquierda turnos de hoy, Derecha calendario -->
+    <div id="ownerBotShiftsView" class="owner-shifts-layout">
+      <div class="card">
+        <div class="card-title">
+          <span id="ownerShiftsHeading">Turnos de hoy</span>
+          <span class="muted" id="ownerShiftsTotals">Confirmado: 0h 00m · Pendiente: 0h 00m</span>
+        </div>
+        <div id="ownerShiftsList" class="stack"></div>
       </div>
-      <div id="ownerShiftsList" class="stack"></div>
+
+      <div class="card cal-card">
+        <div class="card-title">
+          <span>Calendario</span>
+          <button type="button" class="btn-soft btn-sm" id="ownShiftTodayBtn" style="min-height:30px; padding:3px 9px; font-size:11.5px;">Hoy</button>
+        </div>
+
+        <div class="cal-legend">
+          <span><span class="badge b-active">En curso</span></span>
+          <span><span class="badge b-pending">Pendiente</span></span>
+          <span><span class="badge b-confirmed">Confirmado</span></span>
+        </div>
+
+        <div class="cal-nav">
+          <button type="button" class="btn-soft btn-sm" id="ownShiftPrevMonthBtn">◀</button>
+          <strong id="ownShiftMonthTitle">Nov 2026</strong>
+          <button type="button" class="btn-soft btn-sm" id="ownShiftNextMonthBtn">▶</button>
+        </div>
+
+        <div class="kpi-2x2" id="ownShiftKpis"></div>
+
+        <div class="cal-dow">
+          <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+        </div>
+        <div class="cal-days" id="ownShiftCalGrid"></div>
+      </div>
     </div>
 
     <div id="ownerBotTasksView" class="grid-2 hidden">
@@ -1038,6 +1278,8 @@
     <div class="modal-box" id="modalBox"></div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script>
     (function () {
       "use strict";
@@ -1051,7 +1293,6 @@
         return String(Math.floor(Math.abs(Number(n) || 0))).padStart(2, "0");
       }
 
-      // Convierte Date o yyyy-mm-dd a dd/mm/yyyy
       function formatDMY(input) {
         let d;
         if (input instanceof Date) {
@@ -1065,7 +1306,6 @@
         return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
       }
 
-      // Convierte dd/mm/yyyy a yyyy-mm-dd (devuelve null si no es válida)
       function parseDMYtoISO(dmyStr) {
         const s = String(dmyStr || "").trim();
         const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -1119,15 +1359,15 @@
           employees: {
             emp_wendy: {
               id: "emp_wendy",
-              name: "Wendy",
-              pass: "wendy",
+              name: "Yellega",
+              pass: "Yellega",
               rate: 12,
               dailyHours: 4
             },
             emp_ana: {
               id: "emp_ana",
               name: "Ana",
-              pass: "ana",
+              pass: "Ana",
               rate: 10,
               dailyHours: 4
             }
@@ -1164,18 +1404,23 @@
       let db = loadState();
       let ownerProfiles = loadProfiles();
 
-      // Sesión persistente entre rotaciones (vertical / apaisado) y recargas
-      let sess = loadSession() || {
+      const loadedSess = loadSession() || {};
+      let sess = {
         loggedIn: false,
-        role: null, // "owner" | "employee"
-        ownerName: "Fran",
-        employeeId: "emp_wendy",
-        selectedEmpId: "emp_wendy",
-        ownerBottomTab: "shifts", // "shifts" | "tasks" | "chat"
-        ownerTopOverlay: null, // null | "employees" | "pay"
-        empTab: "fichar", // "fichar" | "cal" | "chat"
-        taskFilterISO: todayISO()
+        role: null,
+        ownerName: loadedSess.ownerName || "Fran",
+        employeeId: loadedSess.employeeId || "emp_wendy",
+        selectedEmpId: loadedSess.selectedEmpId || "emp_wendy",
+        ownerBottomTab: loadedSess.ownerBottomTab || "shifts",
+        ownerTopOverlay: null,
+        empTab: loadedSess.empTab || "fichar",
+        taskFilterISO: loadedSess.taskFilterISO || todayISO(),
+        shiftSelectedDateISO: loadedSess.shiftSelectedDateISO || todayISO()
       };
+
+      if (!sess.shiftSelectedDateISO) {
+        sess.shiftSelectedDateISO = todayISO();
+      }
 
       let empCalDate = new Date();
       empCalDate.setDate(1);
@@ -1197,6 +1442,7 @@
         try {
           localStorage.setItem(STATE_KEY, JSON.stringify(db));
         } catch (_) {}
+        pushStateToFirebase();
       }
 
       function loadSession() {
@@ -1220,7 +1466,10 @@
         sess.loggedIn = false;
         sess.role = null;
         sess.ownerTopOverlay = null;
-        saveSession();
+        try {
+          sessionStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(SESSION_KEY);
+        } catch (_) {}
       }
 
       function loadProfiles() {
@@ -1264,10 +1513,67 @@
         applyViewMode();
       }
 
+      const GRACE_MINUTES = 70;
+      const DISMISSED_KEY = "hc_dismissed_overtime_v1";
+      const notifiedOvertime = new Set();
+
+      let dismissedOvertime = {};
+      try {
+        dismissedOvertime = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "{}") || {};
+      } catch (_) {
+        dismissedOvertime = {};
+      }
+
+      function saveDismissedOvertime() {
+        try {
+          localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedOvertime));
+        } catch (_) {}
+      }
+
       function shiftMinutes(sh, now = Date.now()) {
         if (!sh || !sh.startTs) return 0;
         const end = sh.status === "active" ? now : (sh.endTs || sh.startTs);
         return Math.max(0, Math.floor((Number(end) - Number(sh.startTs)) / 60000));
+      }
+
+      function expectedShiftMinutes(sh) {
+        const emp = sh ? db.employees[sh.employeeId] : null;
+        const hrs = emp && Number(emp.dailyHours) > 0 ? Number(emp.dailyHours) : 4;
+        return Math.round(hrs * 60);
+      }
+
+      function overtimeThresholdMinutes(sh) {
+        return expectedShiftMinutes(sh) + GRACE_MINUTES;
+      }
+
+      function isOvertimeThreshold(sh, now = Date.now()) {
+        if (!sh || !sh.startTs) return false;
+        return shiftMinutes(sh, now) >= overtimeThresholdMinutes(sh);
+      }
+
+      function overtimeAlertKey(sh) {
+        return `${sh.id}_${sh.status}`;
+      }
+
+      function isAlertDismissed(sh) {
+        return Boolean(dismissedOvertime[overtimeAlertKey(sh)]);
+      }
+
+      function dismissAlertForShift(sh) {
+        if (!sh) return;
+        dismissedOvertime[overtimeAlertKey(sh)] = Date.now();
+        saveDismissedOvertime();
+      }
+
+      function checkAndNotifyOvertime(sh, now = Date.now()) {
+        if (!sh || !isOvertimeThreshold(sh, now) || isAlertDismissed(sh)) return;
+        const key = overtimeAlertKey(sh);
+        if (!notifiedOvertime.has(key)) {
+          notifiedOvertime.add(key);
+          const emp = db.employees[sh.employeeId];
+          const who = emp ? emp.name : "Turno";
+          toast(`Aviso: ${who} lleva ${formatHM(shiftMinutes(sh, now))} (+1h10m margen)`);
+        }
       }
 
       function getActiveShift(empId) {
@@ -1284,7 +1590,7 @@
         document.getElementById("empCountLabel").textContent = `${empList.length} disponibles`;
 
         const sel = document.getElementById("empLoginSelect");
-        sel.innerHTML = empList.map((e) => `<option value="${e.id}">${e.name}</option>`).join("");
+        sel.innerHTML = empList.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("");
 
         const chipsWrap = document.getElementById("savedOwnerChips");
         const currentName = document.getElementById("ownerNameInput").value.trim();
@@ -1344,13 +1650,31 @@
           const btnIn = document.getElementById("btnPunchIn");
           const btnOut = document.getElementById("btnPunchOut");
 
+          const topBanner = document.getElementById("empTopAlertBanner");
           if (active) {
+            const actMins = shiftMinutes(active);
             document.getElementById("empShiftStateLabel").textContent = "TURNO EN CURSO";
             document.getElementById("empEntryTimeLabel").textContent = `Entrada ${formatHHMM(active.startTs)}`;
-            document.getElementById("empChronoDisplay").textContent = formatHM(shiftMinutes(active));
+            document.getElementById("empChronoDisplay").textContent = formatHM(actMins);
             btnIn.disabled = true;
             btnIn.classList.remove("ready");
             btnOut.disabled = false;
+            checkAndNotifyOvertime(active);
+
+            if (isOvertimeThreshold(active) && !isAlertDismissed(active)) {
+              topBanner.innerHTML = `
+                <span>Aviso: llevas ${formatHM(actMins)} (umbral ${formatHM(overtimeThresholdMinutes(active))} por ${emp.dailyHours || 4}h asignadas + 1h 10m). ¿Olvidaste fichar salida o haces horas extras?</span>
+                <button type="button" class="btn-soft btn-sm" id="empDismissAlertBtn">OK</button>
+              `;
+              topBanner.classList.remove("hidden");
+              document.getElementById("empDismissAlertBtn").onclick = () => {
+                dismissAlertForShift(active);
+                renderEmployeeScreen();
+              };
+            } else {
+              topBanner.classList.add("hidden");
+              topBanner.innerHTML = "";
+            }
           } else {
             document.getElementById("empShiftStateLabel").textContent = "SIN TURNO ACTIVO";
             document.getElementById("empEntryTimeLabel").textContent = "";
@@ -1358,6 +1682,8 @@
             btnIn.disabled = false;
             btnIn.classList.add("ready");
             btnOut.disabled = true;
+            topBanner.classList.add("hidden");
+            topBanner.innerHTML = "";
           }
 
           const tISO = todayISO();
@@ -1394,7 +1720,7 @@
             });
           }
         } else if (sess.empTab === "cal") {
-          renderCalendar("emp", emp.id, empCalDate);
+          renderCalendarGridAndKpis(emp.id, empCalDate, "empMonthTitle", "empKpis", "empCalGrid", null, null);
         } else if (sess.empTab === "chat") {
           document.getElementById("empChatHeader").textContent = `Chat · ${emp.name}`;
           renderChat("empChatList", emp.id, "emp");
@@ -1417,12 +1743,9 @@
           sel.innerHTML = emps.map((e) => `<option value="${e.id}" ${e.id === sess.selectedEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
         }
 
-        // Estado visual de botones superiores (toggle)
         document.getElementById("topBtnEmployees").classList.toggle("active-pill", sess.ownerTopOverlay === "employees");
         document.getElementById("topBtnPay").classList.toggle("active-pill", sess.ownerTopOverlay === "pay");
 
-        // Menús superior e inferior independientes:
-        // Si hay una vista superior activa ("employees" o "pay"), se ocultan las inferiores.
         const hasOverlay = Boolean(sess.ownerTopOverlay);
         document.getElementById("ownerTopEmployeesView").classList.toggle("hidden", sess.ownerTopOverlay !== "employees");
         document.getElementById("ownerTopPayView").classList.toggle("hidden", sess.ownerTopOverlay !== "pay");
@@ -1441,9 +1764,31 @@
         if (sess.ownerTopOverlay === "employees") {
           renderOwnerEmployeesManager();
         } else if (sess.ownerTopOverlay === "pay") {
-          if (emp) renderCalendar("own", emp.id, ownCalDate);
+          if (emp) {
+            renderCalendarGridAndKpis(
+              emp.id,
+              ownCalDate,
+              "ownPayMonthTitle",
+              "ownPayKpis",
+              "ownPayCalGrid",
+              null,
+              (confMins, totalEur, ym) => {
+                const key = `${emp.id}_${ym}`;
+                const savedClosure = db.closures[key];
+                document.getElementById("ownPaySummaryText").textContent = `Total confirmado: ${formatEur(totalEur)} (${formatHM(confMins)})`;
+                const amtInp = document.getElementById("ownPayAmountInput");
+                const dtInp = document.getElementById("ownPayDateInput");
+                if (document.activeElement !== amtInp) {
+                  amtInp.value = savedClosure ? Number(savedClosure.amount).toFixed(2) : totalEur.toFixed(2);
+                }
+                if (document.activeElement !== dtInp) {
+                  dtInp.value = savedClosure ? savedClosure.paidDMY : formatDMY(todayISO());
+                }
+              }
+            );
+          }
         } else if (sess.ownerBottomTab === "shifts") {
-          renderOwnerShifts(emp);
+          renderOwnerShiftsAndCalendar(emp);
         } else if (sess.ownerBottomTab === "tasks") {
           renderOwnerTasks(emp);
         } else if (sess.ownerBottomTab === "chat") {
@@ -1452,65 +1797,133 @@
         }
       }
 
-      function renderOwnerShifts(emp) {
+      function renderOwnerShiftsAndCalendar(emp) {
         const listEl = document.getElementById("ownerShiftsList");
+        const tISO = todayISO();
+        const targetISO = sess.shiftSelectedDateISO || tISO;
+
+        document.getElementById("ownerShiftsHeading").textContent =
+          targetISO === tISO ? "Turnos de hoy" : `Turnos · ${formatDMY(targetISO)}`;
+
         if (!emp) {
           document.getElementById("ownerShiftsTotals").textContent = "Confirmado: 0h 00m · Pendiente: 0h 00m";
           listEl.innerHTML = `<div class="muted">Crea o selecciona una empleada.</div>`;
+          document.getElementById("ownShiftKpis").innerHTML = "";
+          document.getElementById("ownShiftCalGrid").innerHTML = "";
           return;
         }
-        const tISO = todayISO();
-        const shifts = db.shifts.filter((s) => s.employeeId === emp.id && s.dateISO === tISO);
+
+        const topOwnBanner = document.getElementById("ownerTopAlertBanner");
+        const shifts = db.shifts.filter((s) => s.employeeId === emp.id && s.dateISO === targetISO);
         const confMins = shifts.filter((s) => s.status === "confirmed").reduce((a, s) => a + shiftMinutes(s), 0);
         const pendMins = shifts.filter((s) => s.status === "pending").reduce((a, s) => a + shiftMinutes(s), 0);
         document.getElementById("ownerShiftsTotals").textContent = `Confirmado: ${formatHM(confMins)} · Pendiente: ${formatHM(pendMins)}`;
 
-        if (!shifts.length) {
-          listEl.innerHTML = `<div class="muted">No hay turnos hoy para ${escapeHtml(emp.name)}.</div>`;
-          return;
-        }
+        const allFlaggedShifts = db.shifts.filter((s) => isOvertimeThreshold(s));
+        allFlaggedShifts.forEach((s) => checkAndNotifyOvertime(s));
 
-        listEl.innerHTML = shifts.map((s) => {
-          const mins = shiftMinutes(s);
-          const eur = (mins / 60) * (Number(emp.rate) || 0);
-          const badgeCls = s.status === "confirmed" ? "b-confirmed" : (s.status === "pending" ? "b-pending" : "b-active");
-          const badgeTxt = s.status === "confirmed" ? "Confirmado" : (s.status === "pending" ? "Pendiente" : "En curso");
-          return `
-            <div class="shift-item">
-              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                <strong>${formatDMY(s.dateISO)} · ${formatHHMM(s.startTs)} – ${s.status === "active" ? "Ahora" : formatHHMM(s.endTs)}</strong>
-                <span class="badge ${badgeCls}">${badgeTxt}</span>
-              </div>
-              <div class="muted">Duración: <strong>${formatHM(mins)}</strong> · Tarifa: ${formatEur(emp.rate)}/h · Importe: <strong>${formatEur(eur)}</strong></div>
-              <div class="row-wrap">
-                ${s.status === "pending" ? `<button type="button" class="btn-green btn-sm" data-confirm-sh="${s.id}">Confirmar</button>` : ""}
-                <button type="button" class="btn-soft btn-sm" data-edit-sh="${s.id}">Ajustar</button>
-              </div>
+        const visibleFlagged = allFlaggedShifts.filter((s) => !isAlertDismissed(s));
+        if (visibleFlagged.length > 0) {
+          const first = visibleFlagged[0];
+          const firstEmp = db.employees[first.employeeId];
+          const whoLabel = firstEmp ? firstEmp.name : "Turno";
+          const durLabel = formatHM(shiftMinutes(first));
+          const extraCount = visibleFlagged.length > 1 ? ` (+${visibleFlagged.length - 1} más)` : "";
+          const threshLabel = formatHM(overtimeThresholdMinutes(first));
+          topOwnBanner.innerHTML = `
+            <span>Aviso: ${escapeHtml(whoLabel)} lleva ${durLabel} (aviso a las ${threshLabel})${extraCount}. Posible olvido de salida o horas extras.</span>
+            <div class="row-wrap" style="gap:6px;">
+              <button type="button" class="btn-soft btn-sm" id="ownReviewAlertBtn">Revisar</button>
+              <button type="button" class="btn-blue btn-sm" id="ownOkAlertBtn">OK</button>
             </div>
           `;
-        }).join("");
+          topOwnBanner.classList.remove("hidden");
 
-        listEl.querySelectorAll("[data-confirm-sh]").forEach((btn) => {
-          btn.onclick = () => {
-            const sh = db.shifts.find((x) => x.id === btn.getAttribute("data-confirm-sh"));
-            if (sh) {
-              sh.status = "confirmed";
-              saveState();
-              renderOwnerScreen();
-              toast("Turno confirmado.");
+          document.getElementById("ownReviewAlertBtn").onclick = () => {
+            sess.ownerTopOverlay = null;
+            sess.ownerBottomTab = "shifts";
+            sess.selectedEmpId = first.employeeId;
+            sess.shiftSelectedDateISO = first.dateISO;
+            const dObj = new Date(first.dateISO + "T00:00:00");
+            if (!isNaN(dObj.getTime())) {
+              ownCalDate = new Date(dObj.getFullYear(), dObj.getMonth(), 1);
             }
+            saveSession();
+            renderOwnerScreen();
           };
-        });
 
-        listEl.querySelectorAll("[data-edit-sh]").forEach((btn) => {
-          btn.onclick = () => openAdjustShiftModal(btn.getAttribute("data-edit-sh"));
-        });
+          document.getElementById("ownOkAlertBtn").onclick = () => {
+            visibleFlagged.forEach((s) => dismissAlertForShift(s));
+            renderOwnerScreen();
+          };
+        } else {
+          topOwnBanner.classList.add("hidden");
+          topOwnBanner.innerHTML = "";
+        }
+
+        if (!shifts.length) {
+          listEl.innerHTML = `<div class="muted">No hay turnos el ${formatDMY(targetISO)} para ${escapeHtml(emp.name)}.</div>`;
+        } else {
+          listEl.innerHTML = shifts.map((s) => {
+            const mins = shiftMinutes(s);
+            const overFlag = isOvertimeThreshold(s);
+            const eur = (mins / 60) * (Number(emp.rate) || 0);
+            const badgeCls = s.status === "confirmed" ? "b-confirmed" : (s.status === "pending" ? "b-pending" : "b-active");
+            const badgeTxt = s.status === "confirmed" ? "Confirmado" : (s.status === "pending" ? "Pendiente" : "En curso");
+            return `
+              <div class="shift-item" ${overFlag ? 'style="border-color:#f59e0b;"' : ""}>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <strong>${formatDMY(s.dateISO)} · ${formatHHMM(s.startTs)} – ${s.status === "active" ? "Ahora" : formatHHMM(s.endTs)}</strong>
+                  <div class="row-wrap" style="gap:5px;">
+                    ${overFlag ? `<span class="badge b-pending">≥ ${formatHM(overtimeThresholdMinutes(s))}</span>` : ""}
+                    <span class="badge ${badgeCls}">${badgeTxt}</span>
+                  </div>
+                </div>
+                <div class="muted">Duración: <strong>${formatHM(mins)}</strong> · Tarifa: ${formatEur(emp.rate)}/h · Importe: <strong>${formatEur(eur)}</strong></div>
+                <div class="row-wrap">
+                  ${s.status === "pending" ? `<button type="button" class="btn-green btn-sm" data-confirm-sh="${s.id}">Confirmar</button>` : ""}
+                  <button type="button" class="btn-soft btn-sm" data-edit-sh="${s.id}">Ajustar</button>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          listEl.querySelectorAll("[data-confirm-sh]").forEach((btn) => {
+            btn.onclick = () => {
+              const sh = db.shifts.find((x) => x.id === btn.getAttribute("data-confirm-sh"));
+              if (sh) {
+                sh.status = "confirmed";
+                saveState();
+                renderOwnerScreen();
+                toast("Turno confirmado.");
+              }
+            };
+          });
+
+          listEl.querySelectorAll("[data-edit-sh]").forEach((btn) => {
+            btn.onclick = () => openAdjustShiftModal(btn.getAttribute("data-edit-sh"));
+          });
+        }
+
+        renderCalendarGridAndKpis(
+          emp.id,
+          ownCalDate,
+          "ownShiftMonthTitle",
+          "ownShiftKpis",
+          "ownShiftCalGrid",
+          targetISO,
+          null
+        );
       }
 
       function renderOwnerTasks(emp) {
         const emps = Object.values(db.employees);
         const taskEmpSel = document.getElementById("taskEmpSelect");
-        taskEmpSel.innerHTML = emps.map((e) => `<option value="${e.id}" ${e.id === (emp && emp.id) ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
+        const prevSelected = taskEmpSel.value || sess.selectedEmpId || (emp && emp.id) || "";
+        taskEmpSel.innerHTML = emps.map((e) => `<option value="${e.id}" ${e.id === prevSelected ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
+        if (prevSelected && db.employees[prevSelected]) {
+          taskEmpSel.value = prevSelected;
+        }
 
         const activeEmpId = taskEmpSel.value || (emp && emp.id);
         const activeEmp = db.employees[activeEmpId];
@@ -1588,19 +2001,34 @@
         listEl.querySelectorAll("[data-delemp]").forEach((btn) => {
           btn.onclick = () => {
             const id = btn.getAttribute("data-delemp");
+            if (!id || !db.employees[id]) return;
             delete db.employees[id];
-            db.shifts = db.shifts.filter((s) => s.employeeId !== id);
-            db.tasks = db.tasks.filter((t) => t.employeeId !== id);
-            if (sess.selectedEmpId === id) sess.selectedEmpId = null;
-            saveState();
+            if (db.chats && db.chats[id]) {
+              delete db.chats[id];
+            }
+            db.shifts = (db.shifts || []).filter((s) => s.employeeId !== id);
+            db.tasks = (db.tasks || []).filter((t) => t.employeeId !== id);
+            if (sess.selectedEmpId === id) {
+              const remaining = Object.keys(db.employees);
+              sess.selectedEmpId = remaining.length ? remaining[0] : null;
+            }
+            try {
+              localStorage.setItem(STATE_KEY, JSON.stringify(db));
+            } catch (_) {}
             saveSession();
+            if (rtdb) {
+              const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
+              rtdb.ref("homes/" + cleanCode + "/employees/" + id).remove().catch(() => {});
+              rtdb.ref("homes/" + cleanCode + "/chats/" + id).remove().catch(() => {});
+              pushStateToFirebase();
+            }
             renderOwnerScreen();
             toast("Empleada eliminada.");
           };
         });
       }
 
-      function renderCalendar(prefix, empId, monthCursor) {
+      function renderCalendarGridAndKpis(empId, monthCursor, titleId, kpisId, gridId, selectedISO, onStatsReady) {
         const emp = db.employees[empId];
         if (!emp) return;
 
@@ -1608,8 +2036,7 @@
         const m = monthCursor.getMonth();
         const ym = `${y}-${pad2(m + 1)}`;
 
-        const titleEl = document.getElementById(prefix === "emp" ? "empMonthTitle" : "ownMonthTitle");
-        titleEl.textContent = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+        document.getElementById(titleId).textContent = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
 
         const mShifts = db.shifts.filter((s) => s.employeeId === empId && (s.dateISO || "").startsWith(ym));
         const confMins = mShifts.filter((s) => s.status === "confirmed").reduce((a, s) => a + shiftMinutes(s), 0);
@@ -1617,8 +2044,7 @@
         const confDays = new Set(mShifts.filter((s) => s.status === "confirmed").map((s) => s.dateISO)).size;
         const totalEur = (confMins / 60) * (Number(emp.rate) || 0);
 
-        const kpiEl = document.getElementById(prefix === "emp" ? "empKpis" : "ownKpis");
-        kpiEl.innerHTML = `
+        document.getElementById(kpisId).innerHTML = `
           <div class="kpi-box"><div class="lbl">Días trabajados</div><div class="val">${confDays}</div></div>
           <div class="kpi-box"><div class="lbl">Horas confirmadas</div><div class="val">${formatHM(confMins)}</div></div>
           <div class="kpi-box"><div class="lbl">Pendiente conf.</div><div class="val">${formatHM(pendMins)}</div></div>
@@ -1636,7 +2062,7 @@
         });
 
         const firstDay = new Date(y, m, 1);
-        const startOffset = (firstDay.getDay() + 6) % 7; // Lunes = 0
+        const startOffset = (firstDay.getDay() + 6) % 7;
         const daysCount = new Date(y, m + 1, 0).getDate();
 
         let cells = "";
@@ -1650,30 +2076,31 @@
           if (info && info.status === "confirmed") cls = "is-confirmed";
           else if (info && info.status === "pending") cls = "is-pending";
           else if (info && info.status === "active") cls = "is-active";
+          if (selectedISO && dk === selectedISO) cls += " is-selected-day";
 
           cells += `
-            <div class="cal-cell ${cls}">
+            <div class="cal-cell ${cls}" ${selectedISO ? `data-pick-day="${dk}" style="cursor:pointer;"` : ""}>
               <span class="cal-num">${d}</span>
               <span class="cal-sub">${info && info.mins > 0 ? formatHM(info.mins) : ""}</span>
             </div>
           `;
         }
 
-        const gridEl = document.getElementById(prefix === "emp" ? "empCalGrid" : "ownCalGrid");
+        const gridEl = document.getElementById(gridId);
         gridEl.innerHTML = cells;
 
-        if (prefix === "own") {
-          const key = `${empId}_${ym}`;
-          const savedClosure = db.closures[key];
-          document.getElementById("ownPaySummaryText").textContent = `Total confirmado: ${formatEur(totalEur)} (${formatHM(confMins)})`;
-          const amtInp = document.getElementById("ownPayAmountInput");
-          const dtInp = document.getElementById("ownPayDateInput");
-          if (document.activeElement !== amtInp) {
-            amtInp.value = savedClosure ? Number(savedClosure.amount).toFixed(2) : totalEur.toFixed(2);
-          }
-          if (document.activeElement !== dtInp) {
-            dtInp.value = savedClosure ? savedClosure.paidDMY : formatDMY(todayISO());
-          }
+        if (selectedISO) {
+          gridEl.querySelectorAll("[data-pick-day]").forEach((cell) => {
+            cell.onclick = () => {
+              sess.shiftSelectedDateISO = cell.getAttribute("data-pick-day");
+              saveSession();
+              renderOwnerShiftsAndCalendar(emp);
+            };
+          });
+        }
+
+        if (typeof onStatsReady === "function") {
+          onStatsReady(confMins, totalEur, ym);
         }
       }
 
@@ -1774,6 +2201,261 @@
           .replace(/"/g, "&quot;");
       }
 
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDYZFEZOYVwZmRnP9GYlYHz-vuEceD3O84",
+        authDomain: "homecontrol-casa.firebaseapp.com",
+        databaseURL: "https://homecontrol-casa-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "homecontrol-casa",
+        storageBucket: "homecontrol-casa.firebasestorage.app",
+        messagingSenderId: "959693944882",
+        appId: "1:959693944882:web:775071a8e58966e6dda42b",
+        measurementId: "G-1CKQ3HCX9W"
+      };
+
+      let rtdb = null;
+      let fbSubscribedCode = null;
+      let fbRef = null;
+      let isApplyingRemote = false;
+
+      function initFirebaseCompat() {
+        try {
+          if (window.firebase && firebase.apps && !firebase.apps.length) {
+            firebase.initializeApp(FIREBASE_CONFIG);
+          }
+          if (window.firebase && firebase.database) {
+            rtdb = firebase.database();
+          }
+        } catch (err) {
+          console.warn("Firebase init warning:", err);
+        }
+      }
+
+      function toCleanArray(val) {
+        if (!val) return [];
+        const arr = Array.isArray(val) ? val : Object.values(val);
+        return arr.filter((item) => item !== null && item !== undefined && typeof item === "object");
+      }
+
+      function normalizeRemoteHome(raw, fallbackCode) {
+        const base = getDefaultState();
+        const code = String((raw && raw.homeCode) || fallbackCode || base.homeCode || "MARTIN").trim().toUpperCase();
+        if (!raw || typeof raw !== "object") {
+          base.homeCode = code;
+          return base;
+        }
+
+        const rawEmps = raw.employees && typeof raw.employees === "object" ? raw.employees : {};
+        const mergedEmps = {};
+        Object.keys(rawEmps).forEach((eid) => {
+          const e = rawEmps[eid];
+          if (e && typeof e === "object") {
+            mergedEmps[eid] = {
+              id: e.id || eid,
+              name: String(e.name || eid),
+              pass: e.pass !== undefined && e.pass !== null ? String(e.pass) : String(e.name || eid),
+              rate: Number(e.rate) || 10,
+              dailyHours: Number(e.dailyHours) || 4
+            };
+          }
+        });
+
+        const mergedChats = {};
+        const rawChats = raw.chats && typeof raw.chats === "object" ? raw.chats : {};
+        Object.keys(mergedEmps).forEach((eid) => {
+          mergedChats[eid] = toCleanArray(rawChats[eid]);
+        });
+
+        const cleanShifts = toCleanArray(raw.shifts).filter((s) => s.employeeId && s.startTs);
+        const cleanTasks = toCleanArray(raw.tasks).filter((t) => t.employeeId && t.title);
+
+        const cleanClosures = {};
+        if (raw.closures && typeof raw.closures === "object") {
+          Object.keys(raw.closures).forEach((k) => {
+            if (raw.closures[k] && typeof raw.closures[k] === "object") {
+              cleanClosures[k] = raw.closures[k];
+            }
+          });
+        }
+
+        const finalEmps = raw.employees === undefined ? base.employees : mergedEmps;
+        return {
+          homeCode: code,
+          masterPass: raw.masterPass ? String(raw.masterPass) : base.masterPass,
+          employees: finalEmps,
+          shifts: cleanShifts,
+          tasks: cleanTasks,
+          chats: mergedChats,
+          closures: cleanClosures
+        };
+      }
+
+      function subscribeHome(code, onInitialLoaded) {
+        const cleanCode = String(code || db.homeCode || "MARTIN").trim().toUpperCase();
+        db.homeCode = cleanCode;
+        saveState();
+
+        if (!rtdb) {
+          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          return;
+        }
+
+        if (fbRef && fbSubscribedCode === cleanCode) {
+          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          return;
+        }
+
+        if (fbRef) {
+          try { fbRef.off(); } catch (_) {}
+          fbRef = null;
+        }
+
+        fbSubscribedCode = cleanCode;
+        fbRef = rtdb.ref("homes/" + cleanCode);
+
+        let initialDone = false;
+
+        fbRef.on("value", (snap) => {
+          const val = snap.val();
+          isApplyingRemote = true;
+          try {
+            if (val) {
+              db = normalizeRemoteHome(val, cleanCode);
+              try {
+                localStorage.setItem(STATE_KEY, JSON.stringify(db));
+              } catch (_) {}
+            } else {
+              const seed = normalizeRemoteHome(db, cleanCode);
+              db = seed;
+              try {
+                localStorage.setItem(STATE_KEY, JSON.stringify(db));
+              } catch (_) {}
+              fbRef.set(JSON.parse(JSON.stringify(seed))).catch(() => {});
+            }
+            if (sess.loggedIn) {
+              renderApp();
+            } else {
+              renderLogin();
+            }
+          } finally {
+            isApplyingRemote = false;
+          }
+
+          if (!initialDone) {
+            initialDone = true;
+            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          }
+        }, (err) => {
+          console.warn("Firebase listener error:", err);
+          if (!initialDone) {
+            initialDone = true;
+            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          }
+        });
+      }
+
+      function pushStateToFirebase() {
+        if (!rtdb || isApplyingRemote) return;
+        const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
+        db.homeCode = cleanCode;
+        try {
+          localStorage.setItem(STATE_KEY, JSON.stringify(db));
+        } catch (_) {}
+        if (!fbRef || fbSubscribedCode !== cleanCode) {
+          subscribeHome(cleanCode);
+        }
+        try {
+          const payload = JSON.parse(JSON.stringify(db));
+          rtdb.ref("homes/" + cleanCode).set(payload).catch((err) => {
+            console.warn("Firebase set error:", err);
+          });
+        } catch (err) {
+          console.warn("Firebase set error:", err);
+        }
+      }
+
+      function openCreateHomeModal() {
+        const currentCode = (document.getElementById("homeCodeInput").value || "").trim().toUpperCase();
+        const bg = document.getElementById("modalBg");
+        const box = document.getElementById("modalBox");
+
+        box.innerHTML = `
+          <h3 style="margin:0 0 8px;">Crear nuevo hogar en Firebase</h3>
+          <p class="muted" style="margin:0 0 12px;">Se creará la estructura del hogar y su contraseña máster en Realtime Database.</p>
+          <div class="stack">
+            <label class="field-lbl">
+              Código de hogar (mayúsculas, sin espacios)
+              <input type="text" id="mNewHomeCode" value="${escapeHtml(currentCode)}" placeholder="Ej: BARAJAS" autocomplete="off" />
+            </label>
+            <label class="field-lbl">
+              Contraseña máster del hogar
+              <input type="text" id="mNewHomePass" value="1234" placeholder="Contraseña máster" />
+            </label>
+            <label class="field-lbl">
+              Nombre propietario inicial (opcional)
+              <input type="text" id="mNewOwnerName" value="${escapeHtml(ownerProfiles[0] || "Fran")}" placeholder="Ej: Fran" />
+            </label>
+            <div class="row-wrap" style="justify-content:flex-end; gap:8px; margin-top:6px;">
+              <button type="button" class="btn-soft btn-sm" id="mCreateHomeCancel">Cancelar</button>
+              <button type="button" class="btn-blue btn-sm" id="mCreateHomeConfirm">Crear en Firebase</button>
+            </div>
+          </div>
+        `;
+        bg.classList.remove("hidden");
+
+        document.getElementById("mCreateHomeCancel").onclick = () => bg.classList.add("hidden");
+
+        document.getElementById("mCreateHomeConfirm").onclick = () => {
+          const rawCode = document.getElementById("mNewHomeCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+          const newPass = document.getElementById("mNewHomePass").value.trim() || "1234";
+          const ownerNm = document.getElementById("mNewOwnerName").value.trim() || "Fran";
+
+          if (!rawCode) {
+            toast("Escribe un código de hogar válido");
+            return;
+          }
+
+          const freshHome = getDefaultState();
+          freshHome.homeCode = rawCode;
+          freshHome.masterPass = newPass;
+          freshHome.shifts = [];
+          freshHome.tasks = [];
+          freshHome.closures = {};
+
+          db = freshHome;
+          document.getElementById("homeCodeInput").value = rawCode;
+          document.getElementById("ownerNameInput").value = ownerNm;
+          document.getElementById("ownerPassInput").value = newPass;
+          rememberOwnerProfile(ownerNm);
+
+          try {
+            localStorage.setItem(STATE_KEY, JSON.stringify(db));
+          } catch (_) {}
+
+          if (rtdb) {
+            if (fbRef) {
+              try { fbRef.off(); } catch (_) {}
+              fbRef = null;
+            }
+            fbSubscribedCode = rawCode;
+            fbRef = rtdb.ref("homes/" + rawCode);
+            fbRef.set(JSON.parse(JSON.stringify(freshHome))).then(() => {
+              subscribeHome(rawCode, () => {
+                renderLogin();
+                toast(`Hogar ${rawCode} creado en Firebase`);
+              });
+            }).catch((err) => {
+              console.warn("Create home error:", err);
+              toast("No se pudo escribir en Firebase. Revisa Reglas.");
+            });
+          } else {
+            renderLogin();
+            toast(`Hogar ${rawCode} creado en local (sin conexión Firebase)`);
+          }
+
+          bg.classList.add("hidden");
+        };
+      }
+
       function bindEvents() {
         document.getElementById("loginViewModeBtn").onclick = toggleViewMode;
         document.querySelectorAll(".view-toggle-btn").forEach((b) => { b.onclick = toggleViewMode; });
@@ -1788,10 +2470,13 @@
         document.getElementById("loadHomeBtn").onclick = () => {
           const code = document.getElementById("homeCodeInput").value.trim().toUpperCase();
           if (!code) return;
-          db.homeCode = code;
-          saveState();
-          toast(`Hogar ${code} cargado`);
+          subscribeHome(code, () => {
+            renderLogin();
+            toast(`Hogar ${code} sincronizado`);
+          });
         };
+
+        document.getElementById("createHomeBtn").onclick = openCreateHomeModal;
 
         document.getElementById("chooseOwnerBtn").onclick = () => {
           document.getElementById("chooseOwnerBtn").classList.add("active-owner");
@@ -1820,38 +2505,45 @@
         };
 
         document.getElementById("enterOwnerBtn").onclick = () => {
-          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase();
-          if (code) db.homeCode = code;
-
+          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase() || db.homeCode || "MARTIN";
           const name = document.getElementById("ownerNameInput").value.trim() || ownerProfiles[0] || "Fran";
           const pass = document.getElementById("ownerPassInput").value;
+
+          db.homeCode = code;
           if (pass && pass !== db.masterPass) {
             toast("Contraseña máster incorrecta");
             return;
           }
           rememberOwnerProfile(name);
-          saveState();
 
           sess.loggedIn = true;
           sess.role = "owner";
           sess.ownerName = name;
           sess.ownerTopOverlay = null;
           sess.ownerBottomTab = "shifts";
+          sess.shiftSelectedDateISO = todayISO();
           document.getElementById("ownerPassInput").value = "";
           saveSession();
+          try {
+            localStorage.setItem(STATE_KEY, JSON.stringify(db));
+          } catch (_) {}
           renderApp();
+          subscribeHome(code);
         };
 
         document.getElementById("enterEmpBtn").onclick = () => {
-          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase();
-          if (code) db.homeCode = code;
-          saveState();
+          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase() || db.homeCode || "MARTIN";
+          const chosenEmpId = document.getElementById("empLoginSelect").value;
+          const pass = document.getElementById("empPassInput").value.trim();
 
-          const empId = document.getElementById("empLoginSelect").value;
-          const emp = db.employees[empId];
-          if (!emp) return;
-          const pass = document.getElementById("empPassInput").value;
-          if (pass && pass !== emp.pass) {
+          db.homeCode = code;
+          const emp = (chosenEmpId && db.employees[chosenEmpId]) || Object.values(db.employees)[0];
+          if (!emp) {
+            toast("No hay empleadas en este hogar");
+            return;
+          }
+          const expectedPass = String(emp.pass !== undefined && emp.pass !== null ? emp.pass : emp.name).trim();
+          if (pass && pass !== expectedPass && pass !== String(emp.name).trim()) {
             toast("Contraseña incorrecta");
             return;
           }
@@ -1862,10 +2554,13 @@
           sess.empTab = "fichar";
           document.getElementById("empPassInput").value = "";
           saveSession();
+          try {
+            localStorage.setItem(STATE_KEY, JSON.stringify(db));
+          } catch (_) {}
           renderApp();
+          subscribeHome(code);
         };
 
-        // Empleada: pestañas inferiores
         document.querySelectorAll("[data-emp-nav]").forEach((btn) => {
           btn.onclick = () => {
             sess.empTab = btn.getAttribute("data-emp-nav");
@@ -1874,7 +2569,6 @@
           };
         });
 
-        // Empleada: fichar entrada y salida
         document.getElementById("btnPunchIn").onclick = () => {
           const empId = sess.employeeId;
           if (!empId || getActiveShift(empId)) return;
@@ -1892,17 +2586,48 @@
           toast(`Entrada fichada (${formatHHMM(now)})`);
         };
 
-        document.getElementById("btnPunchOut").onclick = () => {
+        function openConfirmPunchOutModal() {
           const empId = sess.employeeId;
           const active = getActiveShift(empId);
           if (!active) return;
-          const now = Date.now();
-          active.endTs = now;
-          active.status = "pending";
-          saveState();
-          renderEmployeeScreen();
-          toast(`Salida fichada (${formatHHMM(now)}) · Pendiente`);
-        };
+
+          const bg = document.getElementById("modalBg");
+          const box = document.getElementById("modalBox");
+          const currentDur = formatHM(shiftMinutes(active, Date.now()));
+
+          box.innerHTML = `
+            <h3 style="margin:0 0 8px;">Confirmar salida</h3>
+            <p style="margin:0 0 14px; font-size:15px;">¿Estás seguro que quieres fichar la salida?</p>
+            <div class="muted" style="margin-bottom:16px;">Tiempo actual del turno: <strong>${currentDur}</strong></div>
+            <div class="row-wrap" style="justify-content:flex-end; gap:10px;">
+              <button type="button" class="btn-soft" id="mOutCancel" style="min-width:110px;">No, cancelar</button>
+              <button type="button" class="btn-amber" id="mOutConfirm" style="min-width:110px;">Sí, salir</button>
+            </div>
+          `;
+          bg.classList.remove("hidden");
+
+          document.getElementById("mOutCancel").onclick = () => {
+            bg.classList.add("hidden");
+          };
+
+          document.getElementById("mOutConfirm").onclick = () => {
+            bg.classList.add("hidden");
+            const sh = getActiveShift(sess.employeeId);
+            if (!sh) return;
+            const now = Date.now();
+            sh.endTs = now;
+            sh.status = "pending";
+            saveState();
+            renderEmployeeScreen();
+            if (isOvertimeThreshold(sh, now)) {
+              toast(`Salida fichada (${formatHHMM(now)}) · Aviso: supera margen de 1h 10m (${formatHM(shiftMinutes(sh, now))})`);
+            } else {
+              toast(`Salida fichada (${formatHHMM(now)}) · Pendiente`);
+            }
+          };
+        }
+
+        document.getElementById("btnPunchOut").onclick = openConfirmPunchOutModal;
 
         document.getElementById("empPrevMonthBtn").onclick = () => {
           empCalDate.setMonth(empCalDate.getMonth() - 1);
@@ -1926,14 +2651,12 @@
           renderChat("empChatList", emp.id, "emp");
         };
 
-        // Propietario: selector de empleada
         document.getElementById("ownerEmpSelect").onchange = (e) => {
           sess.selectedEmpId = e.target.value || null;
           saveSession();
           renderOwnerScreen();
         };
 
-        // Propietario: botones superiores (toggle y separados del menú inferior)
         document.getElementById("topBtnEmployees").onclick = () => {
           sess.ownerTopOverlay = sess.ownerTopOverlay === "employees" ? null : "employees";
           saveSession();
@@ -1952,7 +2675,6 @@
           toast(`Enlace: ${url.toString()}`);
         };
 
-        // Propietario: pestañas inferiores (cierran cualquier vista superior y cambian limpia)
         document.querySelectorAll("[data-own-nav]").forEach((btn) => {
           btn.onclick = () => {
             sess.ownerTopOverlay = null;
@@ -1962,14 +2684,13 @@
           };
         });
 
-        // Propietario: crear empleada
         document.getElementById("addEmpBtn").onclick = () => {
           const name = document.getElementById("newEmpName").value.trim();
           if (!name) {
             toast("Escribe un nombre");
             return;
           }
-          const pass = document.getElementById("newEmpPass").value.trim() || name.toLowerCase();
+          const pass = document.getElementById("newEmpPass").value.trim() || name;
           const rate = Number(document.getElementById("newEmpRate").value) || 10;
           const dailyHours = Number(document.getElementById("newEmpHours").value) || 4;
           const id = "emp_" + Date.now();
@@ -1986,7 +2707,6 @@
           toast(`${name} añadida`);
         };
 
-        // Propietario: tareas especiales (dd/mm/aaaa + actualización inmediata a la derecha)
         document.getElementById("taskEmpSelect").onchange = (e) => {
           sess.selectedEmpId = e.target.value;
           saveSession();
@@ -2026,30 +2746,47 @@
             return;
           }
 
-          db.tasks.push({
+          const newTask = {
             id: "tk_" + Date.now(),
             employeeId: empId,
             dateISO: iso,
             title,
             done: false
-          });
+          };
+          db.tasks = Array.isArray(db.tasks) ? [...db.tasks, newTask] : [newTask];
           sess.selectedEmpId = empId;
           sess.taskFilterISO = iso;
-          saveState();
           saveSession();
+          saveState();
 
           document.getElementById("specialTaskInput").value = "";
           document.getElementById("specialTaskDateDMY").value = formatDMY(iso);
+          document.getElementById("taskEmpSelect").value = empId;
           renderOwnerScreen();
           toast("Tarea asignada");
         };
 
-        // Propietario: calendario y cierre de mes
-        document.getElementById("ownPrevMonthBtn").onclick = () => {
+        document.getElementById("ownShiftPrevMonthBtn").onclick = () => {
           ownCalDate.setMonth(ownCalDate.getMonth() - 1);
           renderOwnerScreen();
         };
-        document.getElementById("ownNextMonthBtn").onclick = () => {
+        document.getElementById("ownShiftNextMonthBtn").onclick = () => {
+          ownCalDate.setMonth(ownCalDate.getMonth() + 1);
+          renderOwnerScreen();
+        };
+        document.getElementById("ownShiftTodayBtn").onclick = () => {
+          const t = new Date();
+          ownCalDate = new Date(t.getFullYear(), t.getMonth(), 1);
+          sess.shiftSelectedDateISO = todayISO();
+          saveSession();
+          renderOwnerScreen();
+        };
+
+        document.getElementById("ownPayPrevMonthBtn").onclick = () => {
+          ownCalDate.setMonth(ownCalDate.getMonth() - 1);
+          renderOwnerScreen();
+        };
+        document.getElementById("ownPayNextMonthBtn").onclick = () => {
           ownCalDate.setMonth(ownCalDate.getMonth() + 1);
           renderOwnerScreen();
         };
@@ -2065,7 +2802,6 @@
           toast("Cierre de mes guardado");
         };
 
-        // Propietario: chat
         document.getElementById("ownerChatForm").onsubmit = (e) => {
           e.preventDefault();
           const empId = sess.selectedEmpId;
@@ -2085,17 +2821,15 @@
           renderChat("ownerChatList", empId, "owner");
         };
 
-        // Refresco del cronómetro si hay turno activo
         setInterval(() => {
           if (sess.loggedIn && sess.role === "employee" && sess.empTab === "fichar") {
             const active = getActiveShift(sess.employeeId);
             if (active) {
-              document.getElementById("empChronoDisplay").textContent = formatHM(shiftMinutes(active));
+              renderEmployeeScreen();
             }
           }
         }, 15000);
 
-        // Conservar sesión al cambiar orientación o tamaño de pantalla
         window.addEventListener("orientationchange", () => {
           saveSession();
           renderApp();
@@ -2105,8 +2839,20 @@
         });
       }
 
+      initFirebaseCompat();
       bindEvents();
-      renderApp();
+      const urlHome = new URLSearchParams(window.location.search).get("hogar");
+      const startHome = (urlHome || db.homeCode || "MARTIN").trim().toUpperCase();
+      sess.loggedIn = false;
+      sess.role = null;
+      renderLogin();
+      subscribeHome(startHome, () => {
+        if (!sess.loggedIn) {
+          renderLogin();
+        } else {
+          renderApp();
+        }
+      });
     })();
   </script>
 </body>

@@ -112,12 +112,16 @@
       soundMuted: localStorage.getItem("hc_sound_muted") === "1",
       unreadChat: {},
       blinkingChat: {},
+      chatBannerText: "",
+      chatBannerEmpId: null,
       data: DEFAULT_HOME_DATA(),
       syncStatus: "local",
       pollTimer: null,
       clockTimer: null,
       audioCtx: null,
-      isBusyAction: false
+      audioUnlocked: false,
+      isBusyAction: false,
+      localWriteGraceUntil: 0
     };
 
     // =========================================================================
@@ -304,9 +308,43 @@
     }
 
     // =========================================================================
-    // SONIDO "PIPIP... PIPIP... PIPIP" POR WEB AUDIO API
+    // SONIDO "PIPIP... PIPIP... PIPIP" + VIBRACIÓN + DESBLOQUEO EN TOQUE
     // =========================================================================
     let soundIntervalId = null;
+
+    function ensureAudioUnlocked() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!state.audioCtx) state.audioCtx = new AudioCtx();
+        if (state.audioCtx.state === "suspended") {
+          state.audioCtx.resume().then(() => { state.audioUnlocked = true; }).catch(() => {});
+        } else {
+          state.audioUnlocked = true;
+        }
+        if (!state.audioUnlocked) {
+          const osc = state.audioCtx.createOscillator();
+          const gain = state.audioCtx.createGain();
+          gain.gain.setValueAtTime(0.0001, state.audioCtx.currentTime);
+          osc.connect(gain);
+          gain.connect(state.audioCtx.destination);
+          osc.start();
+          osc.stop(state.audioCtx.currentTime + 0.02);
+          state.audioUnlocked = true;
+        }
+      } catch (_) {}
+    }
+
+    document.addEventListener("pointerdown", ensureAudioUnlocked, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        ensureAudioUnlocked();
+        updateLiveTimerText();
+        if (state.homeCode && !state.isBusyAction && !isUserInteracting()) {
+          pullFromFirebase(state.homeCode, true).then(() => render());
+        }
+      }
+    });
 
     function playPipPipBurst() {
       if (state.soundMuted) return;
@@ -326,36 +364,48 @@
           osc.type = "sine";
           osc.frequency.setValueAtTime(980, now + offset);
           gain.gain.setValueAtTime(0.001, now + offset);
-          gain.gain.exponentialRampToValueAtTime(0.14, now + offset + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + offset + 0.015);
           gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.09);
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(now + offset);
           osc.stop(now + offset + 0.095);
         });
+        if (navigator.vibrate) {
+          navigator.vibrate([110, 80, 110]);
+        }
       } catch (_) {}
     }
 
-    function triggerChatPipPipAlarm(empId) {
+    function triggerChatPipPipAlarm(empId, previewText = "") {
       state.unreadChat[empId] = true;
       state.blinkingChat[empId] = true;
+      state.chatBannerEmpId = empId;
+      const empName = state.data.employees[empId]?.name || "Chat";
+      state.chatBannerText = previewText
+        ? `Nuevo mensaje (${empName}): ${previewText}`
+        : `Nuevo mensaje en el chat de ${empName}`;
       playPipPipBurst();
       if (soundIntervalId) clearInterval(soundIntervalId);
       let ticks = 0;
       soundIntervalId = setInterval(() => {
         ticks += 1;
-        if (ticks >= 3 || state.soundMuted) {
+        if (ticks >= 2 || state.soundMuted) {
           clearInterval(soundIntervalId);
           soundIntervalId = null;
           return;
         }
         playPipPipBurst();
-      }, 1450);
+      }, 1500);
     }
 
     function stopChatAlarmFor(empId) {
       state.unreadChat[empId] = false;
       state.blinkingChat[empId] = false;
+      if (state.chatBannerEmpId === empId) {
+        state.chatBannerEmpId = null;
+        state.chatBannerText = "";
+      }
       if (soundIntervalId) {
         clearInterval(soundIntervalId);
         soundIntervalId = null;
@@ -400,6 +450,20 @@
       };
     }
 
+    function isMessageFromCurrentUser(msg) {
+      if (!msg) return false;
+      if (state.role === "employee" && msg.senderRole === "employee" && msg.senderId === state.activeEmpId) {
+        return true;
+      }
+      if (state.role === "owner" && msg.senderRole === "owner") {
+        const currentOwner = getCurrentOwnerLabel().trim().toLowerCase();
+        if (currentOwner && (msg.senderName || "").trim().toLowerCase() === currentOwner) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     function detectNewChatMessages(prevData, nextData) {
       const prevChats = prevData.chats || {};
       const nextChats = nextData.chats || {};
@@ -408,15 +472,23 @@
         const nextMsgs = nextChats[empId] || {};
         for (const msgId of Object.keys(nextMsgs)) {
           if (!prevMsgs[msgId]) {
+            const msg = nextMsgs[msgId];
+            if (isMessageFromCurrentUser(msg)) continue;
             const isViewingThisChat =
               (state.role === "employee" && state.activeEmpId === empId && state.empTab === "chat") ||
               (state.role === "owner" && state.ownerSubTab === "chat" && state.ownerChatEmpId === empId);
             if (!isViewingThisChat) {
-              triggerChatPipPipAlarm(empId);
+              triggerChatPipPipAlarm(empId, msg?.text || "");
             }
           }
         }
       }
+    }
+
+    function markLocalWrite() {
+      state.localWriteGraceUntil = Date.now() + 6000;
+      state.data.meta = { ...(state.data.meta || {}), updatedAt: Date.now() };
+      saveLocal(state.homeCode, state.data);
     }
 
     async function pushToFirebase(code, data) {
@@ -452,6 +524,10 @@
         const remoteTs = cleanRemote.meta?.updatedAt || 0;
         const localTs = local?.meta?.updatedAt || 0;
 
+        if (Date.now() < state.localWriteGraceUntil) {
+          return state.data;
+        }
+
         if (remoteTs >= localTs) {
           if (notifyNew) detectNewChatMessages(state.data, cleanRemote);
           state.data = cleanRemote;
@@ -469,18 +545,26 @@
       }
     }
 
+    function isUserInteracting() {
+      const modalRoot = document.getElementById("modal-root");
+      if (modalRoot && !modalRoot.classList.contains("hidden")) return true;
+      const active = document.activeElement;
+      if (active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName)) return true;
+      return false;
+    }
+
     function startRealtimeSync(code) {
       stopRealtimeSync();
       if (!code) return;
       pullFromFirebase(code, false).then(() => render());
       state.pollTimer = setInterval(async () => {
-        if (!state.homeCode || state.isBusyAction) return;
+        if (!state.homeCode || state.isBusyAction || isUserInteracting()) return;
         const prevJson = JSON.stringify(state.data);
         await pullFromFirebase(state.homeCode, true);
-        if (JSON.stringify(state.data) !== prevJson) {
+        if (JSON.stringify(state.data) !== prevJson && !isUserInteracting()) {
           render();
         }
-      }, 2500);
+      }, 3000);
     }
 
     function stopRealtimeSync() {
@@ -501,6 +585,7 @@
       state.data.chats[empId][id] = {
         id,
         senderRole,
+        senderId: senderRole === "employee" ? empId : null,
         senderName,
         text: text.trim(),
         kind,
@@ -511,10 +596,9 @@
     async function appendChatMessage(empId, senderRole, senderName, text, kind = "user") {
       if (!empId || !text || !text.trim()) return;
       addChatMessageLocal(empId, senderRole, senderName, text, kind);
-      saveLocal(state.homeCode, state.data);
+      markLocalWrite();
       render();
       await pushToFirebase(state.homeCode, state.data);
-      render();
     }
 
     function hasOpenShift(empId) {
@@ -530,6 +614,7 @@
     }
 
     async function clockInEmployee(empId) {
+      ensureAudioUnlocked();
       if (state.isBusyAction) return;
       const emp = state.data.employees[empId];
       if (!emp || hasOpenShift(empId)) return;
@@ -561,16 +646,16 @@
           `Entrada fichada a las ${formatTimeHM(now)} (${formatDateShort(dateStr)}). Turno en curso.`,
           "system"
         );
-        saveLocal(state.homeCode, state.data);
+        markLocalWrite();
         render();
         await pushToFirebase(state.homeCode, state.data);
-        render();
       } finally {
         state.isBusyAction = false;
       }
     }
 
     async function clockOutEmployee(empId) {
+      ensureAudioUnlocked();
       if (state.isBusyAction) return;
       const emp = state.data.employees[empId];
       const openShift = getOpenShift(empId);
@@ -597,10 +682,9 @@
           : "";
 
         addChatMessageLocal(empId, "employee", emp.name, baseMsg + alertMsg, "system");
-        saveLocal(state.homeCode, state.data);
+        markLocalWrite();
         render();
         await pushToFirebase(state.homeCode, state.data);
-        render();
       } finally {
         state.isBusyAction = false;
       }
@@ -617,7 +701,7 @@
         }
       }
       if (!changed) return;
-      saveLocal(state.homeCode, state.data);
+      markLocalWrite();
       render();
       await pushToFirebase(state.homeCode, state.data);
     }
@@ -707,6 +791,7 @@
     }
 
     function promptClockOutConfirm(empId) {
+      ensureAudioUnlocked();
       const emp = state.data.employees[empId];
       const openShift = getOpenShift(empId);
       if (!emp || !openShift) return;
@@ -845,7 +930,7 @@
         if (!val) return;
         registerOwnerName(val);
         closeModal();
-        saveLocal(state.homeCode, state.data);
+        markLocalWrite();
         render();
         await pushToFirebase(state.homeCode, state.data);
       };
@@ -869,6 +954,37 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    function renderChatNotificationBanner() {
+      if (!state.chatBannerText || !state.chatBannerEmpId) return "";
+      const isAlreadyInChat =
+        (state.role === "employee" && state.empTab === "chat") ||
+        (state.role === "owner" && state.ownerSubTab === "chat" && state.ownerChatEmpId === state.chatBannerEmpId);
+      if (isAlreadyInChat) return "";
+      return `
+        <button id="hc-chat-banner" type="button"
+          class="w-full rounded-2xl bg-amber-200 hover:bg-amber-300 border border-amber-500 px-3 py-2 text-xs text-amber-950 font-extrabold flex items-center justify-between gap-2 shrink-0 text-left">
+          <span class="truncate">🔔 ${escapeHtml(state.chatBannerText)}</span>
+          <span class="shrink-0 underline">Abrir</span>
+        </button>
+      `;
+    }
+
+    function bindChatNotificationBanner() {
+      const banner = document.getElementById("hc-chat-banner");
+      if (!banner) return;
+      banner.onclick = () => {
+        const empId = state.chatBannerEmpId;
+        if (state.role === "employee") {
+          state.empTab = "chat";
+        } else if (state.role === "owner") {
+          state.ownerSubTab = "chat";
+          if (empId) state.ownerChatEmpId = empId;
+        }
+        if (empId) stopChatAlarmFor(empId);
+        render();
+      };
     }
 
     // =========================================================================
@@ -1031,12 +1147,14 @@
 
     function bindAccessScreen() {
       document.getElementById("btn-toggle-tablet").onclick = () => {
+        ensureAudioUnlocked();
         state.tabletMode = !state.tabletMode;
         localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
         render();
       };
 
       document.getElementById("open-owner-login").onclick = async () => {
+        ensureAudioUnlocked();
         const codeInput = document.getElementById("access-home-code");
         const code = (codeInput?.value || state.homeCode || "").trim().toUpperCase();
         if (code) {
@@ -1050,6 +1168,7 @@
       };
 
       document.getElementById("open-emp-login").onclick = async () => {
+        ensureAudioUnlocked();
         const codeInput = document.getElementById("access-home-code");
         const code = (codeInput?.value || state.homeCode || "").trim().toUpperCase();
         if (code) {
@@ -1072,6 +1191,7 @@
 
       document.querySelectorAll(".quick-owner-chip").forEach((chip) => {
         chip.onclick = () => {
+          ensureAudioUnlocked();
           const picked = chip.dataset.quickowner || "";
           state.ownerName = picked;
           localStorage.setItem("hc_owner_name", picked);
@@ -1082,6 +1202,7 @@
       });
 
       document.getElementById("btn-load-home").onclick = async () => {
+        ensureAudioUnlocked();
         const code = document.getElementById("access-home-code").value.trim().toUpperCase();
         if (!code) return;
         state.homeCode = code;
@@ -1094,6 +1215,7 @@
       const btnOwner = document.getElementById("btn-enter-owner");
       if (btnOwner) {
         btnOwner.onclick = async () => {
+          ensureAudioUnlocked();
           const code = document.getElementById("access-home-code").value.trim().toUpperCase();
           const chosenName = document.getElementById("owner-name-input").value.trim();
           const pass = document.getElementById("owner-pass-input").value;
@@ -1154,6 +1276,7 @@
       const btnEmp = document.getElementById("btn-enter-emp");
       if (btnEmp) {
         btnEmp.onclick = async () => {
+          ensureAudioUnlocked();
           const code = document.getElementById("access-home-code").value.trim().toUpperCase();
           const empId = document.getElementById("emp-select").value;
           const pass = document.getElementById("emp-pass-input").value;
@@ -1214,6 +1337,8 @@
               </button>
             </div>
           </header>
+
+          ${renderChatNotificationBanner()}
 
           <main class="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar">
             ${state.empTab === "work" ? renderEmployeeWorkTab(emp, openShift, elapsedStr, todayTasks) : ""}
@@ -1288,7 +1413,9 @@
     }
 
     function bindEmployeeScreen(emp) {
+      bindChatNotificationBanner();
       document.getElementById("emp-toggle-tablet").onclick = () => {
+        ensureAudioUnlocked();
         state.tabletMode = !state.tabletMode;
         localStorage.setItem("hc_tablet_mode", state.tabletMode ? "1" : "0");
         render();
@@ -1301,6 +1428,7 @@
       };
       document.querySelectorAll(".emp-nav-btn").forEach((btn) => {
         btn.onclick = () => {
+          ensureAudioUnlocked();
           state.empTab = btn.dataset.emptab;
           if (state.empTab === "chat") stopChatAlarmFor(emp.id);
           render();
@@ -1327,7 +1455,7 @@
           const t = state.data.tasks[chk.dataset.taskid];
           if (!t) return;
           t.done = chk.checked;
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1383,6 +1511,8 @@
               </button>
             </div>
           </header>
+
+          ${renderChatNotificationBanner()}
 
           <!-- Aviso +1h con Revisar y OK para cerrarlo -->
           ${firstExcessShift ? `
@@ -1671,6 +1801,7 @@
     }
 
     function bindOwnerScreen() {
+      bindChatNotificationBanner();
       const gearBtn = document.getElementById("owner-gear-btn");
       if (gearBtn) gearBtn.onclick = openOwnerSettingsGearModal;
 
@@ -1706,6 +1837,7 @@
 
       document.querySelectorAll(".o-tab").forEach((btn) => {
         btn.onclick = () => {
+          ensureAudioUnlocked();
           state.ownerSubTab = btn.dataset.otab;
           if (state.ownerSubTab === "chat" && state.ownerChatEmpId) {
             stopChatAlarmFor(state.ownerChatEmpId);
@@ -1740,7 +1872,7 @@
           if (!val) return;
           registerOwnerName(val);
           input.value = "";
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1768,7 +1900,7 @@
           if (!state.ownerChatEmpId) state.ownerChatEmpId = id;
           if (!state.ownerCalEmpId) state.ownerCalEmpId = id;
           if (!state.ownerTaskEmpId) state.ownerTaskEmpId = id;
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1783,7 +1915,7 @@
           const effectiveDate = document.getElementById(`rate-date-${empId}`).value || toDateStr(Date.now());
           emp.rateHistory = Array.isArray(emp.rateHistory) ? emp.rateHistory : [];
           emp.rateHistory.push({ effectiveDate, rate });
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1796,7 +1928,7 @@
           if (state.ownerChatEmpId === id) state.ownerChatEmpId = null;
           if (state.ownerCalEmpId === id) state.ownerCalEmpId = null;
           if (state.ownerTaskEmpId === id) state.ownerTaskEmpId = null;
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1808,7 +1940,7 @@
           const val = document.getElementById("new-master-pass").value;
           if (!val) return;
           state.data.meta.masterPasswordHash = btoa(unescape(encodeURIComponent(val)));
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1839,7 +1971,7 @@
           state.ownerTaskEmpId = empId;
           const taskId = `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
           state.data.tasks[taskId] = { id: taskId, empId, date, title, done: false, createdAt: Date.now() };
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1847,7 +1979,7 @@
       document.querySelectorAll(".btn-del-task").forEach((btn) => {
         btn.onclick = async () => {
           delete state.data.tasks[btn.dataset.deltask];
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -1855,6 +1987,7 @@
 
       document.querySelectorAll(".btn-select-chatemp").forEach((btn) => {
         btn.onclick = () => {
+          ensureAudioUnlocked();
           state.ownerChatEmpId = btn.dataset.chatemp;
           stopChatAlarmFor(state.ownerChatEmpId);
           render();
@@ -2079,7 +2212,7 @@
             paidDate,
             closedAt: Date.now()
           };
-          saveLocal(state.homeCode, state.data);
+          markLocalWrite();
           render();
           await pushToFirebase(state.homeCode, state.data);
         };
@@ -2138,7 +2271,7 @@
             ${msgs.length === 0 ? `
               <div class="text-center text-xs text-slate-400 py-8">Sin mensajes todavía. Escribe algo o ficha un turno.</div>
             ` : msgs.map((m) => {
-              const isMine = m.senderRole === role && m.senderName === senderName;
+              const isMine = isMessageFromCurrentUser(m) || (m.senderRole === role && m.senderName === senderName);
               const isSystem = m.kind === "system";
               const cleanSender = m.senderName && m.senderName !== "Sistema" ? m.senderName : (m.senderRole === "employee" ? "Empleada" : "Propietario");
               return `
@@ -2184,6 +2317,7 @@
       const muteBtn = document.getElementById("btn-mute-sound");
       if (muteBtn) {
         muteBtn.onclick = () => {
+          ensureAudioUnlocked();
           state.soundMuted = !state.soundMuted;
           localStorage.setItem("hc_sound_muted", state.soundMuted ? "1" : "0");
           if (state.soundMuted) stopChatAlarmFor(empId);
@@ -2195,6 +2329,7 @@
       const inputField = document.getElementById("chat-input-field");
       if (sendBtn && inputField) {
         const sendAction = async () => {
+          ensureAudioUnlocked();
           const txt = inputField.value.trim();
           if (!txt) return;
           inputField.value = "";
@@ -2213,21 +2348,24 @@
     // =========================================================================
     // TICKER DE CRONÓMETRO EN TIEMPO REAL
     // =========================================================================
+    function updateLiveTimerText() {
+      if (state.role !== "employee" || state.empTab !== "work" || !state.activeEmpId) return;
+      const emp = state.data.employees[state.activeEmpId];
+      const openShift = getOpenShift(state.activeEmpId);
+      const timerEl = document.getElementById("emp-live-timer");
+      if (!timerEl || !emp) return;
+      if (openShift) {
+        timerEl.textContent = msToHoursMinutes(Date.now() - openShift.startTs).text;
+      } else {
+        const sum = getDayStatusSummary(emp.id, toDateStr(Date.now()));
+        timerEl.textContent = msToHoursMinutes(sum.totalMs).text;
+      }
+    }
+
     function startClockTicker() {
       if (state.clockTimer) clearInterval(state.clockTimer);
-      state.clockTimer = setInterval(() => {
-        if (state.role !== "employee" || state.empTab !== "work" || !state.activeEmpId) return;
-        const emp = state.data.employees[state.activeEmpId];
-        const openShift = getOpenShift(state.activeEmpId);
-        const timerEl = document.getElementById("emp-live-timer");
-        if (!timerEl || !emp) return;
-        if (openShift) {
-          timerEl.textContent = msToHoursMinutes(Date.now() - openShift.startTs).text;
-        } else {
-          const sum = getDayStatusSummary(emp.id, toDateStr(Date.now()));
-          timerEl.textContent = msToHoursMinutes(sum.totalMs).text;
-        }
-      }, 1000);
+      updateLiveTimerText();
+      state.clockTimer = setInterval(updateLiveTimerText, 1000);
     }
 
     // Arranque inicial

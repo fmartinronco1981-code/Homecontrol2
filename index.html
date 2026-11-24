@@ -198,6 +198,7 @@
       border-radius: 10px;
     }
 
+    /* Login / Acceso */
     .login-header {
       display: flex;
       align-items: center;
@@ -303,6 +304,7 @@
       padding-top: 8px;
     }
 
+    /* Top bar en sesión */
     .session-bar {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -362,6 +364,7 @@
       color: var(--red);
     }
 
+    /* Vista empleada: Fichar / Tareas */
     .emp-fichaje-layout {
       display: grid;
       grid-template-columns: 1fr;
@@ -380,6 +383,7 @@
       }
     }
 
+    /* Vista propietario: Turnos (Izquierda turnos, Derecha calendario) y Mes/Pago (Izquierda calendario, Derecha cierre) */
     .owner-shifts-layout,
     .owner-pay-layout {
       display: grid;
@@ -408,6 +412,7 @@
       }
     }
 
+    /* Compactación vertical en tablet / apaisado para ver el mes entero sin scroll vertical */
     body.tablet-mode .app-shell {
       padding-top: 8px;
       padding-bottom: 68px;
@@ -602,6 +607,7 @@
       color: #fff;
     }
 
+    /* Calendario */
     .cal-legend {
       display: flex;
       flex-wrap: wrap;
@@ -716,6 +722,7 @@
       white-space: nowrap;
     }
 
+    /* Tareas y Turnos */
     .task-row {
       display: flex;
       align-items: center;
@@ -787,6 +794,7 @@
     .b-pending { background: var(--amber-soft); color: #92400e; }
     .b-active { background: var(--blue-soft); color: #075985; }
 
+    /* Chat */
     .chat-wrap {
       display: flex;
       flex-direction: column;
@@ -849,6 +857,7 @@
       border-top: 1px solid var(--border);
     }
 
+    /* Bottom nav fija */
     .bottom-dock {
       position: fixed;
       left: 50%;
@@ -881,6 +890,7 @@
       color: #fff;
     }
 
+    /* Modal y Toast */
     .modal-bg {
       position: fixed;
       inset: 0;
@@ -965,7 +975,7 @@
     <div class="role-selector">
       <button type="button" class="role-tile" id="chooseOwnerBtn">
         <strong>PROPIETARIO</strong>
-        <span class="muted">Entrar o enlazar hogar</span>
+        <span class="muted">Acceso y gestión del hogar</span>
       </button>
       <button type="button" class="role-tile" id="chooseEmpBtn">
         <strong>EMPLEADA</strong>
@@ -973,23 +983,20 @@
       </button>
     </div>
 
-    <!-- Panel Acceso Propietario -->
+    <!-- Panel Acceso / Crear Perfil Propietario -->
     <div id="ownerLoginPanel" class="card stack hidden">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="section-kicker" style="margin:0;">Acceso propietario</span>
+        <span class="section-kicker" style="margin:0;">Perfil y acceso propietario</span>
         <button type="button" class="btn-soft btn-sm" id="closeOwnerPanelBtn">Cerrar</button>
       </div>
 
       <div id="savedOwnerChips" class="row-wrap"></div>
 
-      <input type="text" id="ownerNameInput" placeholder="Tu nombre (ej: Fran, Cris...)" />
-      <input type="password" id="ownerPassInput" placeholder="Contraseña máster del hogar" />
+      <input type="text" id="ownerNameInput" placeholder="Tu nombre (ej: Fran, Cris, Pepe...)" />
+      <input type="password" id="ownerPassInput" placeholder="Tu contraseña de perfil / hogar" />
 
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:700; cursor:pointer;">
-          <input type="checkbox" id="ownerMasterCheck" checked style="width:18px; height:18px;" />
-          <span>Propietario 1 (Máster)</span>
-        </label>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn-soft btn-sm" id="saveOwnerProfileBtn">Guardar perfil</button>
         <button type="button" class="btn-blue" id="enterOwnerBtn">Entrar</button>
       </div>
     </div>
@@ -1024,6 +1031,7 @@
 
     <div id="empTopAlertBanner" class="over1h-banner hidden"></div>
 
+    <!-- Pestaña 1: Fichar / Tareas (Izquierda fichaje, Derecha tareas) -->
     <div id="empViewFichar" class="emp-fichaje-layout">
       <div class="card">
         <div class="chrono-top">
@@ -1047,6 +1055,7 @@
       </div>
     </div>
 
+    <!-- Pestaña 2: Calendario Empleada -->
     <div id="empViewCal" class="card cal-card hidden">
       <div class="cal-legend">
         <span><span class="badge b-active">En curso</span></span>
@@ -1068,6 +1077,7 @@
       <div class="cal-days" id="empCalGrid"></div>
     </div>
 
+    <!-- Pestaña 3: Chat Empleada -->
     <div id="empViewChat" class="card hidden">
       <div class="card-title">
         <span id="empChatHeader">Chat</span>
@@ -1115,22 +1125,52 @@
       </div>
     </div>
 
+    <!-- Vistas superiores (mutuamente excluyentes con las inferiores) -->
     <div id="ownerTopEmployeesView" class="grid-2 hidden">
-      <div class="card stack">
-        <div class="section-kicker" style="margin:0;">Nueva empleada</div>
-        <input type="text" id="newEmpName" placeholder="Nombre (ej: Yellega)" />
-        <input type="text" id="newEmpPass" placeholder="Contraseña (por defecto el mismo nombre)" />
-        <div class="grid-2">
-          <label class="field-lbl">
-            Tarifa €/h
-            <input type="number" step="0.5" id="newEmpRate" value="10" />
-          </label>
-          <label class="field-lbl">
-            Horas diarias ficha
-            <input type="number" step="0.5" id="newEmpHours" value="4" />
-          </label>
+      <div class="stack">
+        <div class="card stack">
+          <div class="section-kicker" style="margin:0;">Nueva empleada</div>
+          <input type="text" id="newEmpName" placeholder="Nombre (ej: Yellega)" />
+          <input type="text" id="newEmpPass" placeholder="Contraseña (por defecto el mismo nombre)" />
+          <div class="grid-2">
+            <label class="field-lbl">
+              Tarifa €/h
+              <input type="number" step="0.5" id="newEmpRate" value="10" />
+            </label>
+            <label class="field-lbl">
+              Horas diarias ficha
+              <input type="number" step="0.5" id="newEmpHours" value="4" />
+            </label>
+          </div>
+          <button type="button" class="btn-green" id="addEmpBtn">Añadir empleada</button>
         </div>
-        <button type="button" class="btn-green" id="addEmpBtn">Añadir empleada</button>
+
+        <div class="card stack hidden" id="editEmpCard">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div class="section-kicker" style="margin:0;">Modificar empleada</div>
+            <button type="button" class="btn-soft btn-sm" id="cancelEditEmpBtn">Cerrar</button>
+          </div>
+          <select id="editEmpSelect" class="hidden"></select>
+          <label class="field-lbl">
+            Nombre
+            <input type="text" id="editEmpName" placeholder="Nombre" />
+          </label>
+          <label class="field-lbl">
+            Contraseña
+            <input type="text" id="editEmpPass" placeholder="Contraseña" />
+          </label>
+          <div class="grid-2">
+            <label class="field-lbl">
+              Tarifa €/h (contrato del día)
+              <input type="number" step="0.5" id="editEmpRate" />
+            </label>
+            <label class="field-lbl">
+              Horas diarias ficha
+              <input type="number" step="0.5" id="editEmpHours" />
+            </label>
+          </div>
+          <button type="button" class="btn-blue" id="saveEditEmpBtn">Guardar cambios</button>
+        </div>
       </div>
 
       <div class="card stack">
@@ -1162,7 +1202,13 @@
       </div>
 
       <div class="card stack">
-        <div class="section-kicker" style="margin:0;">Cierre y pago del mes</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="section-kicker" style="margin:0;">Cierre y pago del mes</span>
+          <div class="row-wrap" style="gap:6px;">
+            <button type="button" class="btn-soft btn-sm" id="reopenMonthPayBtn">Reabrir</button>
+            <button type="button" class="btn-soft btn-sm" id="openPayHistoryBtn">Histórico</button>
+          </div>
+        </div>
         <div class="muted" id="ownPaySummaryText">Total confirmado: 0,00 €</div>
         <div class="grid-2">
           <label class="field-lbl">
@@ -1174,10 +1220,13 @@
             <input type="text" id="ownPayDateInput" placeholder="dd/mm/aaaa" />
           </label>
         </div>
-        <button type="button" class="btn-green btn-sm" id="saveMonthPayBtn">Guardar cierre de mes</button>
+        <button type="button" class="btn-green btn-sm" id="saveMonthPayBtn">Cierre de mes y guardar</button>
+        <div id="ownPayLastSavedBadge" class="muted"></div>
       </div>
     </div>
 
+    <!-- Vistas inferiores (Turnos, Tareas, Chat) -->
+    <!-- Turnos: Izquierda turnos de hoy, Derecha calendario -->
     <div id="ownerBotShiftsView" class="owner-shifts-layout">
       <div class="card">
         <div class="card-title">
@@ -1225,7 +1274,6 @@
             <span class="muted" style="font-size:12px;">dd/mm/aaaa</span>
             <input type="date" id="specialTaskDateInput" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2;" />
           </div>
-          <button type="button" class="btn-soft btn-sm" id="btnOpenTaskCalendar">Fecha</button>
         </div>
         <button type="button" class="btn-blue" id="assignSpecialTaskBtn">Asignar tarea</button>
       </div>
@@ -1270,9 +1318,10 @@
     (function () {
       "use strict";
 
-      const STATE_KEY = "hc_visual_state_v2";
-      const SESSION_KEY = "hc_visual_session_v2";
-      const PROFILES_KEY = "hc_owner_profiles_v2";
+      const STATE_KEY_PREFIX = "hc_home_state_v4_";
+      const LEGACY_STATE_KEY = "hc_visual_state_v2";
+      const PROFILES_KEY = "hc_user_profiles_v4";
+      const SESSION_KEY = "hc_visual_session_v4";
       const VIEW_KEY = "hc_view_mode_v2";
 
       function pad2(n) {
@@ -1336,12 +1385,40 @@
         toast._t = setTimeout(() => el.classList.add("hidden"), 2200);
       }
 
-      function getDefaultState() {
+      function normalizeCode(code) {
+        const clean = String(code || "MARTIN").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        return clean || "MARTIN";
+      }
+
+      function homeStorageKey(code) {
+        return STATE_KEY_PREFIX + normalizeCode(code);
+      }
+
+      function getEmptyHomeState(code = "MARTIN") {
+        const cleanCode = normalizeCode(code);
+        return {
+          homeCode: cleanCode,
+          masterPass: "1234",
+          updatedAt: Date.now(),
+          employees: {},
+          shifts: [],
+          tasks: [],
+          chats: {},
+          closures: {}
+        };
+      }
+
+      function getDefaultState(code = "MARTIN") {
+        const cleanCode = normalizeCode(code);
+        if (cleanCode !== "MARTIN") {
+          return getEmptyHomeState(cleanCode);
+        }
         const tISO = todayISO();
         const now = Date.now();
         return {
           homeCode: "MARTIN",
           masterPass: "1234",
+          updatedAt: now,
           employees: {
             emp_wendy: {
               id: "emp_wendy",
@@ -1379,7 +1456,7 @@
           ],
           chats: {
             emp_wendy: [
-              { id: "m1", sender: "sys", name: "Sistema", text: "Chat local listo (pendiente de conectar Firebase).", ts: now - 3600000 }
+              { id: "m1", sender: "sys", name: "Sistema", text: "Chat local listo.", ts: now - 3600000 }
             ],
             emp_ana: []
           },
@@ -1387,8 +1464,69 @@
         };
       }
 
-      let db = loadState();
-      let ownerProfiles = loadProfiles();
+      function hashPass(str) {
+        const s = String(str || "");
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return "h_" + (h >>> 0).toString(16);
+      }
+
+      function loadUserProfiles() {
+        try {
+          const raw = localStorage.getItem(PROFILES_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length) return parsed;
+          }
+        } catch (_) {}
+        return [
+          { id: "usr_fran", name: "Fran", role: "owner", homeCode: "MARTIN", passHash: hashPass("1234") },
+          { id: "usr_cris", name: "Cris", role: "owner", homeCode: "MARTIN", passHash: hashPass("1234") }
+        ];
+      }
+
+      function saveUserProfiles() {
+        try {
+          localStorage.setItem(PROFILES_KEY, JSON.stringify(userProfiles));
+        } catch (_) {}
+      }
+
+      function upsertUserProfile({ name, role, homeCode, rawPass }) {
+        const cleanName = String(name || "").trim();
+        if (!cleanName) return null;
+        const cleanRole = role === "employee" ? "employee" : "owner";
+        const cleanHome = normalizeCode(homeCode);
+        const passToHash = String(rawPass || "").trim() || (cleanRole === "owner" ? "1234" : cleanName);
+        const idx = userProfiles.findIndex((u) => u.name.toLowerCase() === cleanName.toLowerCase() && u.role === cleanRole);
+        const entry = {
+          id: idx >= 0 ? userProfiles[idx].id : ("usr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5)),
+          name: cleanName,
+          role: cleanRole,
+          homeCode: cleanHome,
+          passHash: idx >= 0 && !String(rawPass || "").trim() ? userProfiles[idx].passHash : hashPass(passToHash)
+        };
+        if (idx >= 0) {
+          userProfiles[idx] = entry;
+        } else {
+          userProfiles.push(entry);
+        }
+        saveUserProfiles();
+        return entry;
+      }
+
+      function verifyProfilePassword(profile, rawPass) {
+        if (!profile) return true;
+        const entered = String(rawPass || "").trim();
+        if (!entered) return true;
+        return hashPass(entered) === profile.passHash || entered === profile.name;
+      }
+
+      let activeHomeCode = "MARTIN";
+      let userProfiles = loadUserProfiles();
+      let db = loadHomeState("MARTIN");
 
       const loadedSess = loadSession() || {};
       let sess = {
@@ -1396,7 +1534,7 @@
         role: null,
         ownerName: loadedSess.ownerName || "Fran",
         employeeId: loadedSess.employeeId || "emp_wendy",
-        selectedEmpId: loadedSess.selectedEmpId || "emp_wendy",
+        selectedEmpId: loadedSess.selectedEmpId || null,
         ownerBottomTab: loadedSess.ownerBottomTab || "shifts",
         ownerTopOverlay: null,
         empTab: loadedSess.empTab || "fichar",
@@ -1413,22 +1551,48 @@
       let ownCalDate = new Date();
       ownCalDate.setDate(1);
 
-      function loadState() {
+      function loadHomeState(code) {
+        const cleanCode = normalizeCode(code);
         try {
-          const raw = localStorage.getItem(STATE_KEY);
+          const raw = localStorage.getItem(homeStorageKey(cleanCode));
           if (raw) {
             const parsed = JSON.parse(raw);
-            return Object.assign(getDefaultState(), parsed);
+            return Object.assign(getEmptyHomeState(cleanCode), parsed, { homeCode: cleanCode });
+          }
+          if (cleanCode === "MARTIN") {
+            const legacyRaw = localStorage.getItem(LEGACY_STATE_KEY);
+            if (legacyRaw) {
+              const legacyParsed = JSON.parse(legacyRaw);
+              if (normalizeCode(legacyParsed.homeCode || "MARTIN") === "MARTIN") {
+                return Object.assign(getDefaultState("MARTIN"), legacyParsed, { homeCode: "MARTIN" });
+              }
+            }
           }
         } catch (_) {}
-        return getDefaultState();
+        return getDefaultState(cleanCode);
+      }
+
+      function persistHomeLocalOnly(stateObj = db) {
+        const cleanCode = normalizeCode(stateObj.homeCode || activeHomeCode);
+        stateObj.homeCode = cleanCode;
+        try {
+          localStorage.setItem(homeStorageKey(cleanCode), JSON.stringify(stateObj));
+          if (cleanCode === "MARTIN") {
+            localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(stateObj));
+          }
+        } catch (_) {}
       }
 
       function saveState() {
-        try {
-          localStorage.setItem(STATE_KEY, JSON.stringify(db));
-        } catch (_) {}
+        db.updatedAt = Date.now();
+        persistHomeLocalOnly(db);
         pushStateToFirebase();
+      }
+
+      function refreshNow() {
+        saveSession();
+        persistHomeLocalOnly(db);
+        renderApp();
       }
 
       function loadSession() {
@@ -1580,14 +1744,20 @@
 
         const chipsWrap = document.getElementById("savedOwnerChips");
         const currentName = document.getElementById("ownerNameInput").value.trim();
-        chipsWrap.innerHTML = ownerProfiles.map((name) => {
-          const isSel = currentName.toLowerCase() === name.toLowerCase();
-          return `<button type="button" class="profile-chip ${isSel ? "selected" : ""}" data-prof="${name}">👤 ${name}</button>`;
+        const ownersOnly = userProfiles.filter((u) => u.role === "owner");
+        chipsWrap.innerHTML = ownersOnly.map((u) => {
+          const isSel = currentName.toLowerCase() === u.name.toLowerCase();
+          return `<button type="button" class="profile-chip ${isSel ? "selected" : ""}" data-prof="${escapeHtml(u.name)}" data-prof-home="${escapeHtml(u.homeCode || "")}">👤 ${escapeHtml(u.name)}</button>`;
         }).join("");
 
         chipsWrap.querySelectorAll("[data-prof]").forEach((btn) => {
           btn.onclick = () => {
-            document.getElementById("ownerNameInput").value = btn.getAttribute("data-prof");
+            const pName = btn.getAttribute("data-prof");
+            const pHome = btn.getAttribute("data-prof-home");
+            document.getElementById("ownerNameInput").value = pName;
+            if (pHome) {
+              document.getElementById("homeCodeInput").value = pHome;
+            }
             renderLogin();
           };
         });
@@ -1672,13 +1842,38 @@
             topBanner.innerHTML = "";
           }
 
+          const empClosures = Object.keys(db.closures || {})
+            .filter((k) => k.startsWith(emp.id + "_"))
+            .map((k) => {
+              const lastUnd = k.lastIndexOf("_");
+              const ym = lastUnd > -1 ? k.slice(lastUnd + 1) : k;
+              const c = db.closures[k] || {};
+              return { ym, amount: Number(c.amount) || 0, paidDMY: sanitizePaidDateDMY(c.paidDMY, c.closedAt || c.ts) };
+            })
+            .sort((a, b) => b.ym.localeCompare(a.ym));
+
+          if (empClosures.length > 0 && (!active || !isOvertimeThreshold(active) || isAlertDismissed(active))) {
+            const latestC = empClosures[0];
+            topBanner.innerHTML = `
+              <span>Mes cerrado y pagado (${escapeHtml(formatMonthLabelYM(latestC.ym))}) · Fecha: <strong>${escapeHtml(latestC.paidDMY)}</strong> · Importe: <strong>${formatEur(latestC.amount)}</strong></span>
+              <button type="button" class="btn-soft btn-sm" id="empCloseClosureBannerBtn">OK</button>
+            `;
+            topBanner.classList.remove("hidden");
+            const okClosureBtn = document.getElementById("empCloseClosureBannerBtn");
+            if (okClosureBtn) {
+              okClosureBtn.onclick = () => {
+                topBanner.classList.add("hidden");
+              };
+            }
+          }
+
           const tISO = todayISO();
-          const todayMins = db.shifts
-            .filter((s) => s.employeeId === emp.id && s.dateISO === tISO)
+          const todayMins = (db.shifts || [])
+            .filter((s) => s && s.employeeId === emp.id && s.dateISO === tISO)
             .reduce((acc, s) => acc + shiftMinutes(s), 0);
           document.getElementById("empTodaySummary").textContent = `Hoy acumulado: ${formatHM(todayMins)}`;
 
-          const tasks = db.tasks.filter((t) => t.employeeId === emp.id && t.dateISO === tISO);
+          const tasks = (db.tasks || []).filter((t) => t && String(t.employeeId) === String(emp.id) && t.dateISO === tISO);
           const doneCount = tasks.filter((t) => t.done).length;
           document.getElementById("empTasksCounter").textContent = `${doneCount}/${tasks.length}`;
 
@@ -1761,14 +1956,27 @@
               (confMins, totalEur, ym) => {
                 const key = `${emp.id}_${ym}`;
                 const savedClosure = db.closures[key];
+                const titleEl = document.getElementById("ownPayMonthTitle");
+                if (titleEl) {
+                  const baseMonthTxt = ownCalDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+                  titleEl.innerHTML = savedClosure
+                    ? `${escapeHtml(baseMonthTxt)} <span class="badge b-confirmed" style="margin-left:6px; vertical-align:middle;">Cerrado</span>`
+                    : escapeHtml(baseMonthTxt);
+                }
                 document.getElementById("ownPaySummaryText").textContent = `Total confirmado: ${formatEur(totalEur)} (${formatHM(confMins)})`;
                 const amtInp = document.getElementById("ownPayAmountInput");
                 const dtInp = document.getElementById("ownPayDateInput");
+                const badgeEl = document.getElementById("ownPayLastSavedBadge");
                 if (document.activeElement !== amtInp) {
                   amtInp.value = savedClosure ? Number(savedClosure.amount).toFixed(2) : totalEur.toFixed(2);
                 }
                 if (document.activeElement !== dtInp) {
                   dtInp.value = savedClosure ? savedClosure.paidDMY : formatDMY(todayISO());
+                }
+                if (badgeEl) {
+                  badgeEl.textContent = savedClosure
+                    ? `Cerrado y guardado: ${formatEur(savedClosure.amount)} el ${savedClosure.paidDMY}`
+                    : "Mes aún no cerrado";
                 }
               }
             );
@@ -1879,8 +2087,20 @@
               const sh = db.shifts.find((x) => x.id === btn.getAttribute("data-confirm-sh"));
               if (sh) {
                 sh.status = "confirmed";
-                saveState();
-                renderOwnerScreen();
+                const confBy = sess.ownerName || "Propietario";
+                const shDate = sh.dateISO ? formatDMY(sh.dateISO) : formatDMY(todayISO());
+                const inTime = formatHHMM(sh.startTs);
+                const outTime = sh.endTs ? formatHHMM(sh.endTs) : "--:--";
+                const durTxt = formatHM(shiftMinutes(sh));
+                appendInstantChatMessage(
+                  sh.employeeId,
+                  "sys",
+                  confBy,
+                  `Turno confirmado (${shDate}) · Entrada ${inTime} – Salida ${outTime} (${durTxt}) por ${confBy}`
+                );
+                db.updatedAt = Date.now();
+                refreshNow();
+                pushStateToFirebase();
                 toast("Turno confirmado.");
               }
             };
@@ -1955,24 +2175,95 @@
         });
 
         listEl.querySelectorAll("[data-deltask]").forEach((btn) => {
-          btn.onclick = () => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const tid = btn.getAttribute("data-deltask");
-            db.tasks = (db.tasks || []).filter((x) => x.id !== tid);
+            if (!tid) return;
+            db.tasks = (db.tasks || []).filter((x) => x && String(x.id) !== String(tid));
+            db.updatedAt = Date.now();
+            persistHomeLocalOnly(db);
             saveSession();
-            saveState();
             renderOwnerTasks(activeEmp);
             toast("Tarea eliminada");
+            if (rtdb && !isApplyingRemote) {
+              const cleanCode = normalizeCode(db.homeCode);
+              rtdb.ref("homes/" + cleanCode).update({
+                tasks: JSON.parse(JSON.stringify(db.tasks)),
+                updatedAt: db.updatedAt
+              }).catch((err) => {
+                console.warn("Firebase task delete error:", err);
+              });
+            }
           };
         });
       }
 
+      let editingEmpId = null;
+
+      function clearAndHideEditEmpCard() {
+        editingEmpId = null;
+        const card = document.getElementById("editEmpCard");
+        const sel = document.getElementById("editEmpSelect");
+        const nameInp = document.getElementById("editEmpName");
+        const passInp = document.getElementById("editEmpPass");
+        const rateInp = document.getElementById("editEmpRate");
+        const hrsInp = document.getElementById("editEmpHours");
+        if (sel) sel.value = "";
+        if (nameInp) nameInp.value = "";
+        if (passInp) passInp.value = "";
+        if (rateInp) rateInp.value = "";
+        if (hrsInp) hrsInp.value = "";
+        if (card) card.classList.add("hidden");
+      }
+
+      function openEditEmpCard(empId) {
+        const emp = empId && db.employees[empId] ? db.employees[empId] : null;
+        if (!emp) {
+          clearAndHideEditEmpCard();
+          return;
+        }
+        editingEmpId = emp.id;
+        const card = document.getElementById("editEmpCard");
+        const sel = document.getElementById("editEmpSelect");
+        const nameInp = document.getElementById("editEmpName");
+        const passInp = document.getElementById("editEmpPass");
+        const rateInp = document.getElementById("editEmpRate");
+        const hrsInp = document.getElementById("editEmpHours");
+        if (sel) sel.value = emp.id;
+        if (nameInp) nameInp.value = emp.name || "";
+        if (passInp) passInp.value = emp.pass || "";
+        if (rateInp) rateInp.value = emp.rate != null ? emp.rate : 10;
+        if (hrsInp) hrsInp.value = emp.dailyHours != null ? emp.dailyHours : 4;
+        if (card) {
+          card.classList.remove("hidden");
+          card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
       function renderOwnerEmployeesManager() {
         const listEl = document.getElementById("ownerEmpList");
+        const editSel = document.getElementById("editEmpSelect");
         const emps = Object.values(db.employees);
+
+        if (editSel) {
+          editSel.innerHTML = emps.map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join("");
+        }
+
+        if (!editingEmpId || !db.employees[editingEmpId]) {
+          clearAndHideEditEmpCard();
+        } else {
+          const curEmp = db.employees[editingEmpId];
+          if (editSel) editSel.value = curEmp.id;
+          const card = document.getElementById("editEmpCard");
+          if (card) card.classList.remove("hidden");
+        }
+
         if (!emps.length) {
           listEl.innerHTML = `<div class="muted">No hay empleadas registradas.</div>`;
           return;
         }
+
         listEl.innerHTML = emps.map((e) => `
           <div class="shift-item">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1981,37 +2272,70 @@
             </div>
             <div class="muted">Clave: <code>${escapeHtml(e.pass)}</code></div>
             <div class="row-wrap">
+              <button type="button" class="btn-soft btn-sm" data-editemp="${e.id}">Modificar</button>
               <button type="button" class="btn-red btn-sm" data-delemp="${e.id}">Eliminar</button>
             </div>
           </div>
         `).join("");
 
+        listEl.querySelectorAll("[data-editemp]").forEach((btn) => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.getAttribute("data-editemp");
+            if (!id || !db.employees[id]) return;
+            sess.selectedEmpId = id;
+            saveSession();
+            openEditEmpCard(id);
+            const nameInp = document.getElementById("editEmpName");
+            if (nameInp) nameInp.focus();
+            toast(`Editando a ${db.employees[id].name}`);
+          };
+        });
+
         listEl.querySelectorAll("[data-delemp]").forEach((btn) => {
-          btn.onclick = () => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const id = btn.getAttribute("data-delemp");
             if (!id || !db.employees[id]) return;
-            delete db.employees[id];
-            if (db.chats && db.chats[id]) {
-              delete db.chats[id];
-            }
+            const deletedName = db.employees[id].name;
+            const nextEmps = { ...db.employees };
+            delete nextEmps[id];
+            const nextChats = { ...(db.chats || {}) };
+            delete nextChats[id];
+
+            db.employees = nextEmps;
+            db.chats = nextChats;
             db.shifts = (db.shifts || []).filter((s) => s.employeeId !== id);
             db.tasks = (db.tasks || []).filter((t) => t.employeeId !== id);
+            db.updatedAt = Date.now();
+
+            if (editingEmpId === id) {
+              clearAndHideEditEmpCard();
+            }
             if (sess.selectedEmpId === id) {
               const remaining = Object.keys(db.employees);
               sess.selectedEmpId = remaining.length ? remaining[0] : null;
             }
-            try {
-              localStorage.setItem(STATE_KEY, JSON.stringify(db));
-            } catch (_) {}
+
+            persistHomeLocalOnly(db);
             saveSession();
-            if (rtdb) {
-              const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
+            renderOwnerScreen();
+            toast(`${deletedName} eliminada.`);
+
+            if (rtdb && !isApplyingRemote) {
+              const cleanCode = normalizeCode(db.homeCode);
               rtdb.ref("homes/" + cleanCode + "/employees/" + id).remove().catch(() => {});
               rtdb.ref("homes/" + cleanCode + "/chats/" + id).remove().catch(() => {});
-              pushStateToFirebase();
+              rtdb.ref("homes/" + cleanCode).update({
+                employees: JSON.parse(JSON.stringify(db.employees)),
+                chats: JSON.parse(JSON.stringify(db.chats)),
+                shifts: JSON.parse(JSON.stringify(db.shifts)),
+                tasks: JSON.parse(JSON.stringify(db.tasks)),
+                updatedAt: db.updatedAt
+              }).catch(() => {});
             }
-            renderOwnerScreen();
-            toast("Empleada eliminada.");
           };
         });
       }
@@ -2024,7 +2348,7 @@
         const m = monthCursor.getMonth();
         const ym = `${y}-${pad2(m + 1)}`;
 
-        document.getElementById(titleId).textContent = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+        applyClosedBadgeToTitle(titleId, monthCursor, empId);
 
         const mShifts = db.shifts.filter((s) => s.employeeId === empId && (s.dateISO || "").startsWith(ym));
         const confMins = mShifts.filter((s) => s.status === "confirmed").reduce((a, s) => a + shiftMinutes(s), 0);
@@ -2098,20 +2422,27 @@
           el.innerHTML = `<div class="muted" style="margin:auto;">Selecciona una empleada.</div>`;
           return;
         }
-        const msgs = db.chats[empId] || [];
+        const msgs = (db.chats && Array.isArray(db.chats[empId])) ? db.chats[empId] : [];
         if (!msgs.length) {
           el.innerHTML = `<div class="muted" style="margin:auto;">Sin mensajes todavía.</div>`;
           return;
         }
+        const currentViewerName = viewerRole === "owner"
+          ? String(sess.ownerName || "Propietario").trim().toLowerCase()
+          : String((db.employees[empId] && db.employees[empId].name) || "").trim().toLowerCase();
+
         el.innerHTML = msgs.map((m) => {
+          if (!m || typeof m !== "object") return "";
           if (m.sender === "sys") {
             return `<div class="bubble sys">${escapeHtml(m.text)}<div class="bubble-meta">${formatHHMM(m.ts)}</div></div>`;
           }
-          const mine = m.sender === viewerRole;
+          const sameRole = m.sender === viewerRole;
+          const sameAuthor = currentViewerName && String(m.name || "").trim().toLowerCase() === currentViewerName;
+          const mine = Boolean(sameRole && (!currentViewerName || sameAuthor || viewerRole === "emp"));
           return `
             <div class="bubble ${mine ? "mine" : "theirs"}">
               <div>${escapeHtml(m.text)}</div>
-              <div class="bubble-meta">${escapeHtml(m.name)} · ${formatHHMM(m.ts)}</div>
+              <div class="bubble-meta">${escapeHtml(m.name || "")} · ${formatHHMM(m.ts)}</div>
             </div>
           `;
         }).join("");
@@ -2119,10 +2450,10 @@
       }
 
       function openAdjustShiftModal(shiftId) {
-        const sh = db.shifts.find((x) => x.id === shiftId);
+        const sh = (db.shifts || []).find((x) => x && x.id === shiftId);
         if (!sh) return;
-        const startD = new Date(sh.startTs);
-        const endD = new Date(sh.endTs || Date.now());
+        const startD = new Date(Number(sh.startTs) || Date.now());
+        const endD = new Date(Number(sh.endTs) || Date.now());
 
         const bg = document.getElementById("modalBg");
         const box = document.getElementById("modalBox");
@@ -2131,7 +2462,7 @@
           <div class="stack">
             <label class="field-lbl">
               Fecha (dd/mm/aaaa)
-              <input type="text" id="mShiftDate" value="${formatDMY(sh.dateISO)}" />
+              <input type="text" id="mShiftDate" value="${formatDMY(sh.dateISO || todayISO())}" />
             </label>
             <div class="grid-2">
               <label class="field-lbl">
@@ -2148,6 +2479,7 @@
               <select id="mShiftStatus">
                 <option value="pending" ${sh.status === "pending" ? "selected" : ""}>Pendiente</option>
                 <option value="confirmed" ${sh.status === "confirmed" ? "selected" : ""}>Confirmado</option>
+                ${sh.status === "active" ? `<option value="active" selected>En curso</option>` : ""}
               </select>
             </label>
             <div class="row-wrap" style="justify-content:flex-end; margin-top:6px;">
@@ -2166,17 +2498,46 @@
             return;
           }
           const [y, m, d] = iso.split("-").map(Number);
-          const [shH, shM] = document.getElementById("mShiftStart").value.split(":").map(Number);
-          const [ehH, ehM] = document.getElementById("mShiftEnd").value.split(":").map(Number);
+          const startParts = String(document.getElementById("mShiftStart").value || "00:00").split(":").map(Number);
+          const endParts = String(document.getElementById("mShiftEnd").value || "00:00").split(":").map(Number);
+          const shH = Number.isFinite(startParts[0]) ? startParts[0] : 0;
+          const shM = Number.isFinite(startParts[1]) ? startParts[1] : 0;
+          const ehH = Number.isFinite(endParts[0]) ? endParts[0] : 0;
+          const ehM = Number.isFinite(endParts[1]) ? endParts[1] : 0;
 
-          sh.dateISO = iso;
-          sh.startTs = new Date(y, m - 1, d, shH || 0, shM || 0).getTime();
-          sh.endTs = new Date(y, m - 1, d, ehH || 0, ehM || 0).getTime();
-          if (sh.endTs < sh.startTs) sh.endTs += 86400000;
-          sh.status = document.getElementById("mShiftStatus").value;
-          saveState();
+          const newStartTs = new Date(y, m - 1, d, shH, shM, 0, 0).getTime();
+          let newEndTs = new Date(y, m - 1, d, ehH, ehM, 0, 0).getTime();
+          if (newEndTs < newStartTs) newEndTs += 86400000;
+          const nextStatus = document.getElementById("mShiftStatus").value || "pending";
+
+          db.shifts = (db.shifts || []).map((x) => {
+            if (!x || x.id !== sh.id) return x;
+            return {
+              ...x,
+              dateISO: iso,
+              startTs: newStartTs,
+              endTs: nextStatus === "active" && !x.endTs ? null : newEndTs,
+              status: nextStatus
+            };
+          });
+          if (nextStatus === "confirmed") {
+            const confBy = sess.ownerName || "Propietario";
+            const durTxt = formatHM(shiftMinutes({ ...sh, startTs: newStartTs, endTs: newEndTs, status: nextStatus }));
+            appendInstantChatMessage(
+              sh.employeeId,
+              "sys",
+              confBy,
+              `Turno confirmado (${formatDMY(iso)}) · Entrada ${formatHHMM(newStartTs)} – Salida ${formatHHMM(newEndTs)} (${durTxt}) por ${confBy}`
+            );
+          }
+          db.updatedAt = Date.now();
+          sess.shiftSelectedDateISO = iso;
+          const dtObj = new Date(y, m - 1, 1);
+          ownCalDate = dtObj;
+
           bg.classList.add("hidden");
-          renderOwnerScreen();
+          refreshNow();
+          pushStateToFirebase();
           toast("Turno actualizado.");
         };
       }
@@ -2212,6 +2573,40 @@
           dateDisp.textContent = formatDMY(cleanISO);
         }
       }
+
+      function appendInstantChatMessage(empId, senderRole, senderName, text) {
+        if (!empId || !text) return;
+        const now = Date.now();
+        if (!db.chats) db.chats = {};
+        if (!Array.isArray(db.chats[empId])) db.chats[empId] = [];
+        db.chats[empId] = [
+          ...db.chats[empId],
+          {
+            id: "m_" + now + "_" + Math.random().toString(36).slice(2, 5),
+            sender: senderRole,
+            name: senderName,
+            text,
+            ts: now
+          }
+        ];
+      }
+
+      function isMonthClosed(empId, ym) {
+        if (!empId || !ym) return false;
+        return Boolean((db.closures && db.closures[`${empId}_${ym}`]));
+      }
+
+      function applyClosedBadgeToTitle(titleId, monthCursor, empId) {
+        const titleEl = document.getElementById(titleId);
+        if (!titleEl || !monthCursor) return;
+        const ym = `${monthCursor.getFullYear()}-${pad2(monthCursor.getMonth() + 1)}`;
+        const baseMonthTxt = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+        const closed = isMonthClosed(empId, ym);
+        titleEl.innerHTML = closed
+          ? `${escapeHtml(baseMonthTxt)} <span class="badge b-confirmed" style="margin-left:6px; vertical-align:middle;">Cerrado</span>`
+          : escapeHtml(baseMonthTxt);
+      }
+
 
       function escapeHtml(str) {
         return String(str || "")
@@ -2281,7 +2676,8 @@
 
         const mergedChats = {};
         const rawChats = raw.chats && typeof raw.chats === "object" ? raw.chats : {};
-        Object.keys(mergedEmps).forEach((eid) => {
+        const allChatEmpIds = new Set([...Object.keys(mergedEmps), ...Object.keys(rawChats)]);
+        allChatEmpIds.forEach((eid) => {
           mergedChats[eid] = toCleanArray(rawChats[eid]);
         });
 
@@ -2301,6 +2697,7 @@
         return {
           homeCode: code,
           masterPass: raw.masterPass ? String(raw.masterPass) : base.masterPass,
+          updatedAt: Number(raw.updatedAt || 0),
           employees: finalEmps,
           shifts: cleanShifts,
           tasks: cleanTasks,
@@ -2339,19 +2736,52 @@
           isApplyingRemote = true;
           try {
             if (val) {
-              db = normalizeRemoteHome(val, cleanCode);
-              try {
-                localStorage.setItem(STATE_KEY, JSON.stringify(db));
-              } catch (_) {}
+              const remoteState = normalizeRemoteHome(val, cleanCode);
+              const localState = loadHomeState(cleanCode);
+              const memState = (db && normalizeCode(db.homeCode) === cleanCode) ? db : null;
+              const bestLocal = (memState && Number(memState.updatedAt || 0) >= Number(localState.updatedAt || 0))
+                ? memState
+                : localState;
+              const remoteTs = Number(remoteState.updatedAt || 0);
+              const localTs = Number((bestLocal && bestLocal.updatedAt) || 0);
+              if (localTs > remoteTs && normalizeCode(db.homeCode) === cleanCode) {
+                db = bestLocal;
+                persistHomeLocalOnly(db);
+              } else {
+                const mergedChatsById = { ...(remoteState.chats || {}) };
+                const mergedTasksById = Array.isArray(remoteState.tasks) ? [...remoteState.tasks] : [];
+                if (bestLocal && normalizeCode(db.homeCode) === cleanCode) {
+                  if (bestLocal.chats) {
+                    Object.keys(bestLocal.chats).forEach((eid) => {
+                      const remArr = Array.isArray(mergedChatsById[eid]) ? mergedChatsById[eid] : [];
+                      const locArr = Array.isArray(bestLocal.chats[eid]) ? bestLocal.chats[eid] : [];
+                      const seenIds = new Set(remArr.map((x) => x && x.id).filter(Boolean));
+                      const extras = locArr.filter((x) => x && x.id && !seenIds.has(x.id));
+                      if (extras.length) {
+                        mergedChatsById[eid] = [...remArr, ...extras].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+                      }
+                    });
+                  }
+                  if (Array.isArray(bestLocal.tasks)) {
+                    const seenTaskIds = new Set(mergedTasksById.map((t) => t && t.id).filter(Boolean));
+                    bestLocal.tasks.forEach((t) => {
+                      if (t && t.id && !seenTaskIds.has(t.id) && Number(t.createdAt || db.updatedAt || 0) >= remoteTs) {
+                        mergedTasksById.push(t);
+                        seenTaskIds.add(t.id);
+                      }
+                    });
+                  }
+                }
+                db = { ...remoteState, chats: mergedChatsById, tasks: mergedTasksById };
+                persistHomeLocalOnly(db);
+              }
             } else {
-              const seed = normalizeRemoteHome(db, cleanCode);
-              db = seed;
-              try {
-                localStorage.setItem(STATE_KEY, JSON.stringify(db));
-              } catch (_) {}
-              fbRef.set(JSON.parse(JSON.stringify(seed))).catch(() => {});
+              const localState = loadHomeState(cleanCode);
+              db = normalizeRemoteHome(localState, cleanCode);
+              persistHomeLocalOnly(db);
+              fbRef.set(JSON.parse(JSON.stringify(db))).catch(() => {});
             }
-            if (sess.loggedIn) {
+            if (sess.loggedIn && normalizeCode(db.homeCode) === cleanCode) {
               renderApp();
             }
           } finally {
@@ -2376,7 +2806,7 @@
         const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
         db.homeCode = cleanCode;
         try {
-          localStorage.setItem(STATE_KEY, JSON.stringify(db));
+          localStorage.setItem(homeStorageKey(cleanCode), JSON.stringify(db));
         } catch (_) {}
         if (!fbRef || fbSubscribedCode !== cleanCode) {
           subscribeHome(cleanCode);
@@ -2389,6 +2819,89 @@
         } catch (err) {
           console.warn("Firebase set error:", err);
         }
+      }
+
+      function openCreateHomeModal() {
+        const currentCode = (document.getElementById("homeCodeInput").value || "").trim().toUpperCase();
+        const bg = document.getElementById("modalBg");
+        const box = document.getElementById("modalBox");
+
+        box.innerHTML = `
+          <h3 style="margin:0 0 8px;">Crear nuevo hogar en Firebase</h3>
+          <p class="muted" style="margin:0 0 12px;">Se creará la estructura del hogar y su contraseña máster en Realtime Database.</p>
+          <div class="stack">
+            <label class="field-lbl">
+              Código de hogar (mayúsculas, sin espacios)
+              <input type="text" id="mNewHomeCode" value="${escapeHtml(currentCode)}" placeholder="Ej: BARAJAS" autocomplete="off" />
+            </label>
+            <label class="field-lbl">
+              Contraseña máster del hogar
+              <input type="text" id="mNewHomePass" value="1234" placeholder="Contraseña máster" />
+            </label>
+            <label class="field-lbl">
+              Nombre propietario inicial (opcional)
+              <input type="text" id="mNewOwnerName" value="${escapeHtml(ownerProfiles[0] || "Fran")}" placeholder="Ej: Fran" />
+            </label>
+            <div class="row-wrap" style="justify-content:flex-end; gap:8px; margin-top:6px;">
+              <button type="button" class="btn-soft btn-sm" id="mCreateHomeCancel">Cancelar</button>
+              <button type="button" class="btn-blue btn-sm" id="mCreateHomeConfirm">Crear en Firebase</button>
+            </div>
+          </div>
+        `;
+        bg.classList.remove("hidden");
+
+        document.getElementById("mCreateHomeCancel").onclick = () => bg.classList.add("hidden");
+
+        document.getElementById("mCreateHomeConfirm").onclick = () => {
+          const rawCode = document.getElementById("mNewHomeCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+          const newPass = document.getElementById("mNewHomePass").value.trim() || "1234";
+          const ownerNm = document.getElementById("mNewOwnerName").value.trim() || "Fran";
+
+          if (!rawCode) {
+            toast("Escribe un código de hogar válido");
+            return;
+          }
+
+          const freshHome = getDefaultState();
+          freshHome.homeCode = rawCode;
+          freshHome.masterPass = newPass;
+          freshHome.shifts = [];
+          freshHome.tasks = [];
+          freshHome.closures = {};
+
+          db = freshHome;
+          document.getElementById("homeCodeInput").value = rawCode;
+          document.getElementById("ownerNameInput").value = ownerNm;
+          document.getElementById("ownerPassInput").value = newPass;
+          rememberOwnerProfile(ownerNm);
+
+          try {
+            localStorage.setItem(homeStorageKey(cleanCode), JSON.stringify(db));
+          } catch (_) {}
+
+          if (rtdb) {
+            if (fbRef) {
+              try { fbRef.off(); } catch (_) {}
+              fbRef = null;
+            }
+            fbSubscribedCode = rawCode;
+            fbRef = rtdb.ref("homes/" + rawCode);
+            fbRef.set(JSON.parse(JSON.stringify(freshHome))).then(() => {
+              subscribeHome(rawCode, () => {
+                renderLogin();
+                toast(`Hogar ${rawCode} creado en Firebase`);
+              });
+            }).catch((err) => {
+              console.warn("Create home error:", err);
+              toast("No se pudo escribir en Firebase. Revisa Reglas.");
+            });
+          } else {
+            renderLogin();
+            toast(`Hogar ${rawCode} creado en local (sin conexión Firebase)`);
+          }
+
+          bg.classList.add("hidden");
+        };
       }
 
       function bindEvents() {
@@ -2408,7 +2921,7 @@
             const code = homeCodeInp.value.trim().toUpperCase();
             if (!code) return;
             db.homeCode = code;
-            try { localStorage.setItem(STATE_KEY, JSON.stringify(db)); } catch (_) {}
+            try { localStorage.setItem(homeStorageKey(cleanCode), JSON.stringify(db)); } catch (_) {}
           };
         }
 
@@ -2438,60 +2951,87 @@
           document.getElementById("chooseEmpBtn").classList.remove("active-emp");
         };
 
-        document.getElementById("enterOwnerBtn").onclick = () => {
-          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase() || db.homeCode || "MARTIN";
-          const name = document.getElementById("ownerNameInput").value.trim() || ownerProfiles[0] || "Fran";
-          const pass = document.getElementById("ownerPassInput").value;
-
-          db.homeCode = code;
-          if (pass && pass !== db.masterPass) {
-            toast("Contraseña máster incorrecta");
+        document.getElementById("saveOwnerProfileBtn").onclick = () => {
+          const code = normalizeCode(document.getElementById("homeCodeInput").value || activeHomeCode);
+          const name = document.getElementById("ownerNameInput").value.trim();
+          const pass = document.getElementById("ownerPassInput").value.trim();
+          if (!name) {
+            toast("Escribe tu nombre para crear o actualizar el perfil");
             return;
           }
-          rememberOwnerProfile(name);
+          upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass || "1234" });
+          document.getElementById("ownerPassInput").value = "";
+          renderLogin();
+          toast(`Perfil de ${name} guardado`);
+        };
+
+        document.getElementById("enterOwnerBtn").onclick = () => {
+          const code = normalizeCode(document.getElementById("homeCodeInput").value || activeHomeCode);
+          const name = document.getElementById("ownerNameInput").value.trim() || (userProfiles.find((u) => u.role === "owner") || {}).name || "Fran";
+          const pass = document.getElementById("ownerPassInput").value.trim();
+
+          const existingProf = userProfiles.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "owner");
+          if (existingProf && pass && !verifyProfilePassword(existingProf, pass)) {
+            toast("Contraseña de perfil incorrecta");
+            return;
+          }
+
+          activeHomeCode = code;
+          db = loadHomeState(code);
+          db.homeCode = code;
+          if (!existingProf) {
+            upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass || "1234" });
+          } else {
+            existingProf.homeCode = code;
+            if (pass) existingProf.passHash = hashPass(pass);
+            saveUserProfiles();
+          }
 
           sess.loggedIn = true;
           sess.role = "owner";
           sess.ownerName = name;
+          sess.selectedEmpId = Object.keys(db.employees)[0] || null;
           sess.ownerTopOverlay = null;
           sess.ownerBottomTab = "shifts";
           sess.shiftSelectedDateISO = todayISO();
           document.getElementById("ownerPassInput").value = "";
-          saveSession();
-          try {
-            localStorage.setItem(STATE_KEY, JSON.stringify(db));
-          } catch (_) {}
-          renderApp();
+          refreshNow();
           subscribeHome(code);
         };
 
         document.getElementById("enterEmpBtn").onclick = () => {
-          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase() || db.homeCode || "MARTIN";
+          const code = normalizeCode(document.getElementById("homeCodeInput").value || activeHomeCode);
+          activeHomeCode = code;
+          db = loadHomeState(code);
+          db.homeCode = code;
+
           const chosenEmpId = document.getElementById("empLoginSelect").value;
           const pass = document.getElementById("empPassInput").value.trim();
-
-          db.homeCode = code;
           const emp = (chosenEmpId && db.employees[chosenEmpId]) || Object.values(db.employees)[0];
           if (!emp) {
             toast("No hay empleadas en este hogar");
             return;
           }
           const expectedPass = String(emp.pass !== undefined && emp.pass !== null ? emp.pass : emp.name).trim();
-          if (pass && pass !== expectedPass && pass !== String(emp.name).trim()) {
-            toast("Contraseña incorrecta");
+          if (!pass) {
+            toast("Introduce tu contraseña");
+            document.getElementById("empPassInput").focus();
             return;
           }
+          if (pass !== expectedPass) {
+            toast("Contraseña incorrecta");
+            document.getElementById("empPassInput").focus();
+            return;
+          }
+
+          upsertUserProfile({ name: emp.name, role: "employee", homeCode: code, rawPass: pass || expectedPass });
 
           sess.loggedIn = true;
           sess.role = "employee";
           sess.employeeId = emp.id;
           sess.empTab = "fichar";
           document.getElementById("empPassInput").value = "";
-          saveSession();
-          try {
-            localStorage.setItem(STATE_KEY, JSON.stringify(db));
-          } catch (_) {}
-          renderApp();
+          refreshNow();
           subscribeHome(code);
         };
 
@@ -2506,17 +3046,27 @@
         document.getElementById("btnPunchIn").onclick = () => {
           const empId = sess.employeeId;
           if (!empId || getActiveShift(empId)) return;
+          const emp = db.employees[empId];
+          const empName = emp ? emp.name : "Empleada";
           const now = Date.now();
-          db.shifts.unshift({
+          const dISO = todayISO();
+          db.shifts = [{
             id: "sh_" + now,
             employeeId: empId,
-            dateISO: todayISO(),
+            dateISO: dISO,
             startTs: now,
             endTs: null,
             status: "active"
-          });
-          saveState();
-          renderEmployeeScreen();
+          }, ...(db.shifts || [])];
+          appendInstantChatMessage(
+            empId,
+            "sys",
+            empName,
+            `Entrada fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)}`
+          );
+          db.updatedAt = now;
+          refreshNow();
+          pushStateToFirebase();
           toast(`Entrada fichada (${formatHHMM(now)})`);
         };
 
@@ -2548,11 +3098,21 @@
             bg.classList.add("hidden");
             const sh = getActiveShift(sess.employeeId);
             if (!sh) return;
+            const emp = db.employees[sess.employeeId];
+            const empName = emp ? emp.name : "Empleada";
             const now = Date.now();
+            const dISO = sh.dateISO || todayISO();
             sh.endTs = now;
             sh.status = "pending";
-            saveState();
-            renderEmployeeScreen();
+            appendInstantChatMessage(
+              sess.employeeId,
+              "sys",
+              empName,
+              `Salida fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)}`
+            );
+            db.updatedAt = now;
+            refreshNow();
+            pushStateToFirebase();
             if (isOvertimeThreshold(sh, now)) {
               toast(`Salida fichada (${formatHHMM(now)}) · Aviso: supera margen de 1h 10m (${formatHM(shiftMinutes(sh, now))})`);
             } else {
@@ -2592,6 +3152,7 @@
         };
 
         document.getElementById("topBtnEmployees").onclick = () => {
+          clearAndHideEditEmpCard();
           sess.ownerTopOverlay = sess.ownerTopOverlay === "employees" ? null : "employees";
           saveSession();
           renderOwnerScreen();
@@ -2631,13 +3192,13 @@
 
           db.employees[id] = { id, name, pass, rate, dailyHours };
           if (!db.chats[id]) db.chats[id] = [];
+          db.updatedAt = Date.now();
           sess.selectedEmpId = id;
-          saveState();
-          saveSession();
 
           document.getElementById("newEmpName").value = "";
           document.getElementById("newEmpPass").value = "";
-          renderOwnerScreen();
+          refreshNow();
+          pushStateToFirebase();
           toast(`${name} añadida`);
         };
 
@@ -2712,12 +3273,6 @@
             return;
           }
 
-          isSavingTask = true;
-          const prevBtnText = assignBtn.textContent;
-          assignBtn.disabled = true;
-          assignBtn.textContent = "Asignando...";
-
-          const prevTasks = Array.isArray(db.tasks) ? [...db.tasks] : [];
           const newTask = {
             id: "tk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
             employeeId: empId,
@@ -2726,48 +3281,21 @@
             done: false
           };
 
-          db.tasks = [...prevTasks, newTask];
+          db.tasks = [...(Array.isArray(db.tasks) ? db.tasks : []), newTask];
+          db.updatedAt = Date.now();
           sess.selectedEmpId = empId;
           sess.taskFilterISO = iso;
 
-          try {
-            localStorage.setItem(STATE_KEY, JSON.stringify(db));
-            saveSession();
-          } catch (_) {}
-
           titleInp.value = "";
+          assignBtn.disabled = false;
+          assignBtn.textContent = "Asignar tarea";
+          isSavingTask = false;
           syncTaskDateControls(iso);
           empSel.value = empId;
+          refreshNow();
           renderOwnerTasks(db.employees[empId]);
           toast("Tarea asignada");
-
-          if (rtdb && !isApplyingRemote) {
-            const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
-            db.homeCode = cleanCode;
-            if (!fbRef || fbSubscribedCode !== cleanCode) {
-              subscribeHome(cleanCode);
-            }
-            rtdb.ref("homes/" + cleanCode + "/tasks").set(JSON.parse(JSON.stringify(db.tasks)))
-              .then(() => {
-                isSavingTask = false;
-                assignBtn.disabled = false;
-                assignBtn.textContent = prevBtnText || "Asignar tarea";
-              })
-              .catch((err) => {
-                console.warn("Firebase task save error:", err);
-                db.tasks = prevTasks;
-                try { localStorage.setItem(STATE_KEY, JSON.stringify(db)); } catch (_) {}
-                isSavingTask = false;
-                assignBtn.disabled = false;
-                assignBtn.textContent = prevBtnText || "Asignar tarea";
-                renderOwnerTasks(db.employees[empId]);
-                toast("Error al guardar en Firebase");
-              });
-          } else {
-            isSavingTask = false;
-            assignBtn.disabled = false;
-            assignBtn.textContent = prevBtnText || "Asignar tarea";
-          }
+          pushStateToFirebase();
         };
 
         document.getElementById("ownShiftPrevMonthBtn").onclick = () => {
@@ -2795,19 +3323,209 @@
           renderOwnerScreen();
         };
 
+        const cancelEditEmpBtnEl = document.getElementById("cancelEditEmpBtn");
+        if (cancelEditEmpBtnEl) {
+          cancelEditEmpBtnEl.onclick = () => {
+            clearAndHideEditEmpCard();
+          };
+        }
+
+        const editEmpSelEl = document.getElementById("editEmpSelect");
+        if (editEmpSelEl) {
+          editEmpSelEl.onchange = () => {
+            if (editEmpSelEl.value && db.employees[editEmpSelEl.value]) {
+              openEditEmpCard(editEmpSelEl.value);
+            }
+          };
+        }
+
+        const saveEditEmpBtnEl = document.getElementById("saveEditEmpBtn");
+        if (saveEditEmpBtnEl) {
+          saveEditEmpBtnEl.onclick = () => {
+            const targetId = (editingEmpId || document.getElementById("editEmpSelect").value || sess.selectedEmpId);
+            if (!targetId || !db.employees[targetId]) {
+              toast("Selecciona una empleada para modificar");
+              return;
+            }
+            const nextName = document.getElementById("editEmpName").value.trim();
+            if (!nextName) {
+              toast("El nombre no puede estar vacío");
+              return;
+            }
+            const nextPass = document.getElementById("editEmpPass").value.trim() || nextName;
+            const nextRate = Number(document.getElementById("editEmpRate").value);
+            const nextHours = Number(document.getElementById("editEmpHours").value);
+
+            db.employees[targetId] = {
+              ...db.employees[targetId],
+              name: nextName,
+              pass: nextPass,
+              rate: isNaN(nextRate) ? db.employees[targetId].rate : nextRate,
+              dailyHours: isNaN(nextHours) ? db.employees[targetId].dailyHours : nextHours
+            };
+            db.updatedAt = Date.now();
+            sess.selectedEmpId = targetId;
+            clearAndHideEditEmpCard();
+            refreshNow();
+            pushStateToFirebase();
+            toast(`${nextName} actualizada`);
+          };
+        }
+
+        function formatMonthLabelYM(ym) {
+          const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
+          if (!m) return String(ym || "");
+          const dt = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+          if (isNaN(dt.getTime())) return String(ym);
+          return dt.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+        }
+
+        function sanitizePaidDateDMY(rawDate, fallbackTs) {
+          const s = String(rawDate || "").trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDMY(s);
+          const num = Number(s);
+          if (!isNaN(num) && num > 100000000) return formatDMY(num);
+          if (fallbackTs && !isNaN(Number(fallbackTs))) return formatDMY(Number(fallbackTs));
+          return formatDMY(todayISO());
+        }
+
+        const openPayHistoryBtnEl = document.getElementById("openPayHistoryBtn");
+        if (openPayHistoryBtnEl) {
+          openPayHistoryBtnEl.onclick = () => {
+            const empId = sess.selectedEmpId;
+            const emp = empId ? db.employees[empId] : null;
+            const closuresObj = db.closures || {};
+            const entries = Object.keys(closuresObj)
+              .filter((k) => !empId || k.startsWith(empId + "_"))
+              .map((k) => {
+                const lastUnd = k.lastIndexOf("_");
+                const ym = lastUnd > -1 ? k.slice(lastUnd + 1) : k;
+                const c = closuresObj[k] || {};
+                const cleanPaid = sanitizePaidDateDMY(c.paidDMY, c.closedAt || c.ts);
+                return {
+                  key: k,
+                  ym,
+                  monthLabel: formatMonthLabelYM(ym),
+                  amount: Number(c.amount) || 0,
+                  paidDMY: cleanPaid
+                };
+              })
+              .sort((a, b) => b.ym.localeCompare(a.ym));
+
+            const bg = document.getElementById("modalBg");
+            const box = document.getElementById("modalBox");
+            box.innerHTML = `
+              <h3 style="margin:0 0 8px;">Histórico de cierres${emp ? " · " + escapeHtml(emp.name) : ""}</h3>
+              <div class="stack" style="max-height:55dvh; overflow-y:auto;">
+                ${entries.length ? entries.map((it) => `
+                  <div class="shift-item">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <strong>${escapeHtml(it.monthLabel)}</strong>
+                      <span class="badge b-confirmed">${formatEur(it.amount)}</span>
+                    </div>
+                    <div class="muted">Pagado el: ${escapeHtml(it.paidDMY)}</div>
+                  </div>
+                `).join("") : `<div class="muted">No hay cierres guardados todavía.</div>`}
+              </div>
+              <div class="row-wrap" style="justify-content:flex-end; margin-top:12px;">
+                <button type="button" class="btn-blue btn-sm" id="mHistClose">Cerrar</button>
+              </div>
+            `;
+            bg.classList.remove("hidden");
+            document.getElementById("mHistClose").onclick = () => bg.classList.add("hidden");
+          };
+        }
+
+        const reopenMonthPayBtnEl = document.getElementById("reopenMonthPayBtn");
+        if (reopenMonthPayBtnEl) {
+          reopenMonthPayBtnEl.onclick = () => {
+            const empId = sess.selectedEmpId;
+            if (!empId) return;
+            const ym = `${ownCalDate.getFullYear()}-${pad2(ownCalDate.getMonth() + 1)}`;
+            const key = `${empId}_${ym}`;
+            if (!db.closures || !db.closures[key]) {
+              toast("Este mes no está cerrado");
+              return;
+            }
+
+            const bg = document.getElementById("modalBg");
+            const box = document.getElementById("modalBox");
+            box.innerHTML = `
+              <h3 style="margin:0 0 8px;">Reabrir mes</h3>
+              <p style="margin:0 0 10px; font-size:15px;">¿Quieres reabrir <strong>${escapeHtml(formatMonthLabelYM(ym))}</strong> para volver a trabajar sobre él?</p>
+              <div class="row-wrap" style="justify-content:flex-end; gap:10px; margin-top:12px;">
+                <button type="button" class="btn-soft btn-sm" id="mReopenCancel">No</button>
+                <button type="button" class="btn-blue btn-sm" id="mReopenYes">Sí, reabrir</button>
+              </div>
+            `;
+            bg.classList.remove("hidden");
+
+            document.getElementById("mReopenCancel").onclick = () => bg.classList.add("hidden");
+            document.getElementById("mReopenYes").onclick = () => {
+              bg.classList.add("hidden");
+              const nextClosures = { ...(db.closures || {}) };
+              delete nextClosures[key];
+              db.closures = nextClosures;
+              db.updatedAt = Date.now();
+              persistHomeLocalOnly(db);
+              saveSession();
+              renderOwnerScreen();
+              toast(`Mes ${formatMonthLabelYM(ym)} reabierto`);
+              if (rtdb && !isApplyingRemote) {
+                const cleanCode = normalizeCode(db.homeCode);
+                rtdb.ref("homes/" + cleanCode + "/closures/" + key).remove().catch(() => {});
+                rtdb.ref("homes/" + cleanCode).update({
+                  closures: JSON.parse(JSON.stringify(db.closures)),
+                  updatedAt: db.updatedAt
+                }).catch(() => {});
+              }
+            };
+          };
+        }
+
         document.getElementById("saveMonthPayBtn").onclick = () => {
           const empId = sess.selectedEmpId;
           if (!empId) return;
           const ym = `${ownCalDate.getFullYear()}-${pad2(ownCalDate.getMonth() + 1)}`;
           const amt = Number(document.getElementById("ownPayAmountInput").value) || 0;
           const paidDMY = document.getElementById("ownPayDateInput").value.trim() || formatDMY(todayISO());
-          db.closures = {
-            ...(db.closures || {}),
-            [`${empId}_${ym}`]: { amount: amt, paidDMY }
+
+          const bg = document.getElementById("modalBg");
+          const box = document.getElementById("modalBox");
+          box.innerHTML = `
+            <h3 style="margin:0 0 8px;">Confirmar cierre de mes</h3>
+            <p style="margin:0 0 10px; font-size:15px;">¿Estás seguro de guardar?</p>
+            <div class="muted" style="margin-bottom:14px;">Mes: <strong>${ym}</strong> · Importe: <strong>${formatEur(amt)}</strong> · Fecha: <strong>${escapeHtml(paidDMY)}</strong></div>
+            <div class="row-wrap" style="justify-content:flex-end; gap:10px;">
+              <button type="button" class="btn-soft btn-sm" id="mCloseCancel">No</button>
+              <button type="button" class="btn-green btn-sm" id="mCloseYes">Sí</button>
+            </div>
+          `;
+          bg.classList.remove("hidden");
+
+          document.getElementById("mCloseCancel").onclick = () => bg.classList.add("hidden");
+          document.getElementById("mCloseYes").onclick = () => {
+            bg.classList.add("hidden");
+            const cleanPaidDMY = sanitizePaidDateDMY(paidDMY, Date.now());
+            const empObj = db.employees[empId];
+            const empLabel = empObj ? empObj.name : "Empleada";
+            const monthText = formatMonthLabelYM(ym);
+            db.closures = {
+              ...(db.closures || {}),
+              [`${empId}_${ym}`]: { amount: amt, paidDMY: cleanPaidDMY, closedAt: Date.now() }
+            };
+            appendInstantChatMessage(
+              empId,
+              "sys",
+              sess.ownerName || "Propietario",
+              `Mes cerrado y pagado (${monthText}) · Fecha: ${cleanPaidDMY} · ${formatEur(amt)} (${empLabel})`
+            );
+            db.updatedAt = Date.now();
+            refreshNow();
+            pushStateToFirebase();
+            toast("Cierre de mes guardado en histórico");
           };
-          saveState();
-          renderOwnerScreen();
-          toast("Cierre de mes guardado");
         };
 
         document.getElementById("ownerChatForm").onsubmit = (e) => {
@@ -2854,7 +3572,13 @@
       sess.loggedIn = false;
       sess.role = null;
       renderLogin();
-      subscribeHome(startHome);
+      subscribeHome(startHome, () => {
+        if (!sess.loggedIn) {
+          renderLogin();
+        } else {
+          renderApp();
+        }
+      });
     })();
   </script>
 </body>

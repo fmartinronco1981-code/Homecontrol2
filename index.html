@@ -198,7 +198,6 @@
       border-radius: 10px;
     }
 
-    /* Login / Acceso */
     .login-header {
       display: flex;
       align-items: center;
@@ -304,7 +303,6 @@
       padding-top: 8px;
     }
 
-    /* Top bar en sesión */
     .session-bar {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -364,7 +362,6 @@
       color: var(--red);
     }
 
-    /* Vista empleada: Fichar / Tareas */
     .emp-fichaje-layout {
       display: grid;
       grid-template-columns: 1fr;
@@ -383,7 +380,6 @@
       }
     }
 
-    /* Vista propietario: Turnos (Izquierda turnos, Derecha calendario) y Mes/Pago (Izquierda calendario, Derecha cierre) */
     .owner-shifts-layout,
     .owner-pay-layout {
       display: grid;
@@ -412,7 +408,6 @@
       }
     }
 
-    /* Compactación vertical en tablet / apaisado para ver el mes entero sin scroll vertical */
     body.tablet-mode .app-shell {
       padding-top: 8px;
       padding-bottom: 68px;
@@ -607,7 +602,6 @@
       color: #fff;
     }
 
-    /* Calendario */
     .cal-legend {
       display: flex;
       flex-wrap: wrap;
@@ -722,7 +716,6 @@
       white-space: nowrap;
     }
 
-    /* Tareas y Turnos */
     .task-row {
       display: flex;
       align-items: center;
@@ -794,7 +787,6 @@
     .b-pending { background: var(--amber-soft); color: #92400e; }
     .b-active { background: var(--blue-soft); color: #075985; }
 
-    /* Chat */
     .chat-wrap {
       display: flex;
       flex-direction: column;
@@ -857,7 +849,6 @@
       border-top: 1px solid var(--border);
     }
 
-    /* Bottom nav fija */
     .bottom-dock {
       position: fixed;
       left: 50%;
@@ -890,7 +881,6 @@
       color: #fff;
     }
 
-    /* Modal y Toast */
     .modal-bg {
       position: fixed;
       inset: 0;
@@ -969,8 +959,6 @@
       <div class="section-kicker">Código o enlace de hogar</div>
       <div class="home-code-row">
         <input type="text" id="homeCodeInput" placeholder="Ej: MARTIN" autocomplete="off" />
-        <button type="button" class="btn-soft btn-sm" id="loadHomeBtn">Cargar</button>
-        <button type="button" class="btn-blue btn-sm" id="createHomeBtn">Crear</button>
       </div>
     </div>
 
@@ -1036,7 +1024,6 @@
 
     <div id="empTopAlertBanner" class="over1h-banner hidden"></div>
 
-    <!-- Pestaña 1: Fichar / Tareas (Izquierda fichaje, Derecha tareas) -->
     <div id="empViewFichar" class="emp-fichaje-layout">
       <div class="card">
         <div class="chrono-top">
@@ -1060,7 +1047,6 @@
       </div>
     </div>
 
-    <!-- Pestaña 2: Calendario Empleada -->
     <div id="empViewCal" class="card cal-card hidden">
       <div class="cal-legend">
         <span><span class="badge b-active">En curso</span></span>
@@ -1082,7 +1068,6 @@
       <div class="cal-days" id="empCalGrid"></div>
     </div>
 
-    <!-- Pestaña 3: Chat Empleada -->
     <div id="empViewChat" class="card hidden">
       <div class="card-title">
         <span id="empChatHeader">Chat</span>
@@ -1130,7 +1115,6 @@
       </div>
     </div>
 
-    <!-- Vistas superiores (mutuamente excluyentes con las inferiores) -->
     <div id="ownerTopEmployeesView" class="grid-2 hidden">
       <div class="card stack">
         <div class="section-kicker" style="margin:0;">Nueva empleada</div>
@@ -1194,8 +1178,6 @@
       </div>
     </div>
 
-    <!-- Vistas inferiores (Turnos, Tareas, Chat) -->
-    <!-- Turnos: Izquierda turnos de hoy, Derecha calendario -->
     <div id="ownerBotShiftsView" class="owner-shifts-layout">
       <div class="card">
         <div class="card-title">
@@ -1237,9 +1219,13 @@
         <div class="section-kicker" style="margin:0;">Asignar tarea especial</div>
         <select id="taskEmpSelect"></select>
         <input type="text" id="specialTaskInput" placeholder="Ej: Limpiar hornos o cambiar sábanas" />
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="text" id="specialTaskDateDMY" placeholder="dd/mm/aaaa" />
-          <button type="button" class="btn-soft btn-sm" id="btnTaskToday">Hoy</button>
+        <div style="display:flex; gap:8px; align-items:stretch; position:relative;">
+          <div id="specialTaskDateBox" role="button" tabindex="0" aria-label="Seleccionar fecha de la tarea" style="flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:10px 12px; cursor:pointer; position:relative;">
+            <span id="specialTaskDateDisplay" style="font-weight:700;"></span>
+            <span class="muted" style="font-size:12px;">dd/mm/aaaa</span>
+            <input type="date" id="specialTaskDateInput" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2;" />
+          </div>
+          <button type="button" class="btn-soft btn-sm" id="btnOpenTaskCalendar">Fecha</button>
         </div>
         <button type="button" class="btn-blue" id="assignSpecialTaskBtn">Asignar tarea</button>
       </div>
@@ -1917,63 +1903,65 @@
       }
 
       function renderOwnerTasks(emp) {
-        const emps = Object.values(db.employees);
+        const emps = Object.values(db.employees || {});
         const taskEmpSel = document.getElementById("taskEmpSelect");
         const prevSelected = taskEmpSel.value || sess.selectedEmpId || (emp && emp.id) || "";
-        taskEmpSel.innerHTML = emps.map((e) => `<option value="${e.id}" ${e.id === prevSelected ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
+        taskEmpSel.innerHTML = emps.map((e) => `<option value="${escapeHtml(e.id)}" ${e.id === prevSelected ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
         if (prevSelected && db.employees[prevSelected]) {
           taskEmpSel.value = prevSelected;
         }
 
-        const activeEmpId = taskEmpSel.value || (emp && emp.id);
-        const activeEmp = db.employees[activeEmpId];
+        const activeEmpId = taskEmpSel.value || (emp && emp.id) || "";
+        const activeEmp = activeEmpId ? db.employees[activeEmpId] : null;
 
         const filterISO = sess.taskFilterISO || todayISO();
-        const dateInput = document.getElementById("specialTaskDateDMY");
-        if (document.activeElement !== dateInput) {
-          dateInput.value = formatDMY(filterISO);
-        }
+        syncTaskDateControls(filterISO);
 
         document.getElementById("assignedTasksTitle").textContent = activeEmp
           ? `TAREAS ASIGNADAS · ${activeEmp.name.toUpperCase()} (${formatDMY(filterISO)})`
           : "TAREAS ASIGNADAS";
 
-        const filtered = db.tasks.filter((t) => t.employeeId === activeEmpId && t.dateISO === filterISO);
+        const filtered = (db.tasks || []).filter((t) => t.employeeId === activeEmpId && t.dateISO === filterISO);
         document.getElementById("assignedTasksCount").textContent = String(filtered.length);
 
         const listEl = document.getElementById("assignedTasksList");
+        if (!activeEmpId) {
+          listEl.innerHTML = `<div class="muted">Selecciona o crea una empleada para asignar tareas.</div>`;
+          return;
+        }
         if (!filtered.length) {
           listEl.innerHTML = `<div class="muted">Sin tareas asignadas para ${formatDMY(filterISO)}.</div>`;
           return;
         }
 
         listEl.innerHTML = filtered.map((t) => `
-          <div class="task-row">
+          <div class="task-row" data-task-row="${escapeHtml(t.id)}">
             <label>
-              <input type="checkbox" data-otask="${t.id}" ${t.done ? "checked" : ""} />
+              <input type="checkbox" data-otask="${escapeHtml(t.id)}" ${t.done ? "checked" : ""} />
               <span class="${t.done ? "done-text" : ""}">${escapeHtml(t.title)}</span>
             </label>
-            <button type="button" class="btn-red btn-sm" data-deltask="${t.id}">✕</button>
+            <button type="button" class="btn-red btn-sm" data-deltask="${escapeHtml(t.id)}">✕</button>
           </div>
         `).join("");
 
         listEl.querySelectorAll("[data-otask]").forEach((cb) => {
           cb.onchange = () => {
-            const tk = db.tasks.find((x) => x.id === cb.getAttribute("data-otask"));
-            if (tk) {
-              tk.done = cb.checked;
-              saveState();
-              renderOwnerScreen();
-            }
+            const tid = cb.getAttribute("data-otask");
+            db.tasks = (db.tasks || []).map((x) => (x.id === tid ? { ...x, done: cb.checked } : x));
+            saveSession();
+            saveState();
+            renderOwnerTasks(activeEmp);
           };
         });
 
         listEl.querySelectorAll("[data-deltask]").forEach((btn) => {
           btn.onclick = () => {
-            db.tasks = db.tasks.filter((x) => x.id !== btn.getAttribute("data-deltask"));
+            const tid = btn.getAttribute("data-deltask");
+            db.tasks = (db.tasks || []).filter((x) => x.id !== tid);
+            saveSession();
             saveState();
-            renderOwnerScreen();
-            toast("Tarea eliminada.");
+            renderOwnerTasks(activeEmp);
+            toast("Tarea eliminada");
           };
         });
       }
@@ -2193,6 +2181,38 @@
         };
       }
 
+      let isSavingTask = false;
+
+      function openDatePicker(inputEl) {
+        if (!inputEl) return;
+        try {
+          inputEl.focus({ preventScroll: true });
+        } catch (_) {
+          try { inputEl.focus(); } catch (_) {}
+        }
+        if (typeof inputEl.showPicker === "function") {
+          try {
+            inputEl.showPicker();
+            return;
+          } catch (_) {}
+        }
+        try {
+          inputEl.click();
+        } catch (_) {}
+      }
+
+      function syncTaskDateControls(isoDate) {
+        const cleanISO = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || "")) ? isoDate : todayISO();
+        const dateInp = document.getElementById("specialTaskDateInput");
+        const dateDisp = document.getElementById("specialTaskDateDisplay");
+        if (dateInp && dateInp.value !== cleanISO) {
+          dateInp.value = cleanISO;
+        }
+        if (dateDisp) {
+          dateDisp.textContent = formatDMY(cleanISO);
+        }
+      }
+
       function escapeHtml(str) {
         return String(str || "")
           .replace(/&/g, "&amp;")
@@ -2333,8 +2353,6 @@
             }
             if (sess.loggedIn) {
               renderApp();
-            } else {
-              renderLogin();
             }
           } finally {
             isApplyingRemote = false;
@@ -2373,89 +2391,6 @@
         }
       }
 
-      function openCreateHomeModal() {
-        const currentCode = (document.getElementById("homeCodeInput").value || "").trim().toUpperCase();
-        const bg = document.getElementById("modalBg");
-        const box = document.getElementById("modalBox");
-
-        box.innerHTML = `
-          <h3 style="margin:0 0 8px;">Crear nuevo hogar en Firebase</h3>
-          <p class="muted" style="margin:0 0 12px;">Se creará la estructura del hogar y su contraseña máster en Realtime Database.</p>
-          <div class="stack">
-            <label class="field-lbl">
-              Código de hogar (mayúsculas, sin espacios)
-              <input type="text" id="mNewHomeCode" value="${escapeHtml(currentCode)}" placeholder="Ej: BARAJAS" autocomplete="off" />
-            </label>
-            <label class="field-lbl">
-              Contraseña máster del hogar
-              <input type="text" id="mNewHomePass" value="1234" placeholder="Contraseña máster" />
-            </label>
-            <label class="field-lbl">
-              Nombre propietario inicial (opcional)
-              <input type="text" id="mNewOwnerName" value="${escapeHtml(ownerProfiles[0] || "Fran")}" placeholder="Ej: Fran" />
-            </label>
-            <div class="row-wrap" style="justify-content:flex-end; gap:8px; margin-top:6px;">
-              <button type="button" class="btn-soft btn-sm" id="mCreateHomeCancel">Cancelar</button>
-              <button type="button" class="btn-blue btn-sm" id="mCreateHomeConfirm">Crear en Firebase</button>
-            </div>
-          </div>
-        `;
-        bg.classList.remove("hidden");
-
-        document.getElementById("mCreateHomeCancel").onclick = () => bg.classList.add("hidden");
-
-        document.getElementById("mCreateHomeConfirm").onclick = () => {
-          const rawCode = document.getElementById("mNewHomeCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-          const newPass = document.getElementById("mNewHomePass").value.trim() || "1234";
-          const ownerNm = document.getElementById("mNewOwnerName").value.trim() || "Fran";
-
-          if (!rawCode) {
-            toast("Escribe un código de hogar válido");
-            return;
-          }
-
-          const freshHome = getDefaultState();
-          freshHome.homeCode = rawCode;
-          freshHome.masterPass = newPass;
-          freshHome.shifts = [];
-          freshHome.tasks = [];
-          freshHome.closures = {};
-
-          db = freshHome;
-          document.getElementById("homeCodeInput").value = rawCode;
-          document.getElementById("ownerNameInput").value = ownerNm;
-          document.getElementById("ownerPassInput").value = newPass;
-          rememberOwnerProfile(ownerNm);
-
-          try {
-            localStorage.setItem(STATE_KEY, JSON.stringify(db));
-          } catch (_) {}
-
-          if (rtdb) {
-            if (fbRef) {
-              try { fbRef.off(); } catch (_) {}
-              fbRef = null;
-            }
-            fbSubscribedCode = rawCode;
-            fbRef = rtdb.ref("homes/" + rawCode);
-            fbRef.set(JSON.parse(JSON.stringify(freshHome))).then(() => {
-              subscribeHome(rawCode, () => {
-                renderLogin();
-                toast(`Hogar ${rawCode} creado en Firebase`);
-              });
-            }).catch((err) => {
-              console.warn("Create home error:", err);
-              toast("No se pudo escribir en Firebase. Revisa Reglas.");
-            });
-          } else {
-            renderLogin();
-            toast(`Hogar ${rawCode} creado en local (sin conexión Firebase)`);
-          }
-
-          bg.classList.add("hidden");
-        };
-      }
-
       function bindEvents() {
         document.getElementById("loginViewModeBtn").onclick = toggleViewMode;
         document.querySelectorAll(".view-toggle-btn").forEach((b) => { b.onclick = toggleViewMode; });
@@ -2467,16 +2402,15 @@
           };
         });
 
-        document.getElementById("loadHomeBtn").onclick = () => {
-          const code = document.getElementById("homeCodeInput").value.trim().toUpperCase();
-          if (!code) return;
-          subscribeHome(code, () => {
-            renderLogin();
-            toast(`Hogar ${code} sincronizado`);
-          });
-        };
-
-        document.getElementById("createHomeBtn").onclick = openCreateHomeModal;
+        const homeCodeInp = document.getElementById("homeCodeInput");
+        if (homeCodeInp) {
+          homeCodeInp.onchange = () => {
+            const code = homeCodeInp.value.trim().toUpperCase();
+            if (!code) return;
+            db.homeCode = code;
+            try { localStorage.setItem(STATE_KEY, JSON.stringify(db)); } catch (_) {}
+          };
+        }
 
         document.getElementById("chooseOwnerBtn").onclick = () => {
           document.getElementById("chooseOwnerBtn").classList.add("active-owner");
@@ -2708,62 +2642,132 @@
         };
 
         document.getElementById("taskEmpSelect").onchange = (e) => {
-          sess.selectedEmpId = e.target.value;
+          sess.selectedEmpId = e.target.value || null;
           saveSession();
-          renderOwnerScreen();
+          renderOwnerTasks(sess.selectedEmpId ? db.employees[sess.selectedEmpId] : null);
         };
 
-        document.getElementById("specialTaskDateDMY").onchange = (e) => {
-          const iso = parseDMYtoISO(e.target.value);
-          if (iso) {
+        const taskDateInp = document.getElementById("specialTaskDateInput");
+        const taskDateBox = document.getElementById("specialTaskDateBox");
+        const btnOpenTaskCal = document.getElementById("btnOpenTaskCalendar");
+
+        if (taskDateBox) {
+          taskDateBox.onclick = (e) => {
+            if (e.target !== taskDateInp) {
+              openDatePicker(taskDateInp);
+            }
+          };
+          taskDateBox.onkeydown = (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openDatePicker(taskDateInp);
+            }
+          };
+        }
+
+        if (btnOpenTaskCal) {
+          btnOpenTaskCal.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openDatePicker(taskDateInp);
+          };
+        }
+
+        if (taskDateInp) {
+          taskDateInp.onchange = () => {
+            const iso = /^\d{4}-\d{2}-\d{2}$/.test(taskDateInp.value) ? taskDateInp.value : todayISO();
             sess.taskFilterISO = iso;
+            syncTaskDateControls(iso);
             saveSession();
-            renderOwnerScreen();
-          } else {
-            toast("Formato de fecha: dd/mm/aaaa");
-          }
-        };
-
-        document.getElementById("btnTaskToday").onclick = () => {
-          sess.taskFilterISO = todayISO();
-          document.getElementById("specialTaskDateDMY").value = formatDMY(sess.taskFilterISO);
-          saveSession();
-          renderOwnerScreen();
-        };
+            const currentEmp = sess.selectedEmpId ? db.employees[sess.selectedEmpId] : null;
+            renderOwnerTasks(currentEmp);
+          };
+        }
 
         document.getElementById("assignSpecialTaskBtn").onclick = () => {
-          const empId = document.getElementById("taskEmpSelect").value || sess.selectedEmpId;
-          const title = document.getElementById("specialTaskInput").value.trim();
-          const dateRaw = document.getElementById("specialTaskDateDMY").value.trim();
-          const iso = parseDMYtoISO(dateRaw) || sess.taskFilterISO || todayISO();
+          if (isSavingTask) return;
 
-          if (!empId) {
+          const assignBtn = document.getElementById("assignSpecialTaskBtn");
+          const titleInp = document.getElementById("specialTaskInput");
+          const empSel = document.getElementById("taskEmpSelect");
+          const dateInp = document.getElementById("specialTaskDateInput");
+
+          const empId = empSel.value || sess.selectedEmpId;
+          const title = titleInp.value.trim();
+          const iso = (dateInp && /^\d{4}-\d{2}-\d{2}$/.test(dateInp.value))
+            ? dateInp.value
+            : (sess.taskFilterISO || todayISO());
+
+          if (!empId || !db.employees[empId]) {
             toast("Selecciona una empleada");
+            return;
+          }
+          if (!iso) {
+            toast("Selecciona una fecha");
             return;
           }
           if (!title) {
             toast("Escribe la tarea");
+            titleInp.focus();
             return;
           }
 
+          isSavingTask = true;
+          const prevBtnText = assignBtn.textContent;
+          assignBtn.disabled = true;
+          assignBtn.textContent = "Asignando...";
+
+          const prevTasks = Array.isArray(db.tasks) ? [...db.tasks] : [];
           const newTask = {
-            id: "tk_" + Date.now(),
+            id: "tk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
             employeeId: empId,
             dateISO: iso,
             title,
             done: false
           };
-          db.tasks = Array.isArray(db.tasks) ? [...db.tasks, newTask] : [newTask];
+
+          db.tasks = [...prevTasks, newTask];
           sess.selectedEmpId = empId;
           sess.taskFilterISO = iso;
-          saveSession();
-          saveState();
 
-          document.getElementById("specialTaskInput").value = "";
-          document.getElementById("specialTaskDateDMY").value = formatDMY(iso);
-          document.getElementById("taskEmpSelect").value = empId;
-          renderOwnerScreen();
+          try {
+            localStorage.setItem(STATE_KEY, JSON.stringify(db));
+            saveSession();
+          } catch (_) {}
+
+          titleInp.value = "";
+          syncTaskDateControls(iso);
+          empSel.value = empId;
+          renderOwnerTasks(db.employees[empId]);
           toast("Tarea asignada");
+
+          if (rtdb && !isApplyingRemote) {
+            const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
+            db.homeCode = cleanCode;
+            if (!fbRef || fbSubscribedCode !== cleanCode) {
+              subscribeHome(cleanCode);
+            }
+            rtdb.ref("homes/" + cleanCode + "/tasks").set(JSON.parse(JSON.stringify(db.tasks)))
+              .then(() => {
+                isSavingTask = false;
+                assignBtn.disabled = false;
+                assignBtn.textContent = prevBtnText || "Asignar tarea";
+              })
+              .catch((err) => {
+                console.warn("Firebase task save error:", err);
+                db.tasks = prevTasks;
+                try { localStorage.setItem(STATE_KEY, JSON.stringify(db)); } catch (_) {}
+                isSavingTask = false;
+                assignBtn.disabled = false;
+                assignBtn.textContent = prevBtnText || "Asignar tarea";
+                renderOwnerTasks(db.employees[empId]);
+                toast("Error al guardar en Firebase");
+              });
+          } else {
+            isSavingTask = false;
+            assignBtn.disabled = false;
+            assignBtn.textContent = prevBtnText || "Asignar tarea";
+          }
         };
 
         document.getElementById("ownShiftPrevMonthBtn").onclick = () => {
@@ -2797,8 +2801,12 @@
           const ym = `${ownCalDate.getFullYear()}-${pad2(ownCalDate.getMonth() + 1)}`;
           const amt = Number(document.getElementById("ownPayAmountInput").value) || 0;
           const paidDMY = document.getElementById("ownPayDateInput").value.trim() || formatDMY(todayISO());
-          db.closures[`${empId}_${ym}`] = { amount: amt, paidDMY };
+          db.closures = {
+            ...(db.closures || {}),
+            [`${empId}_${ym}`]: { amount: amt, paidDMY }
+          };
           saveState();
+          renderOwnerScreen();
           toast("Cierre de mes guardado");
         };
 
@@ -2846,13 +2854,7 @@
       sess.loggedIn = false;
       sess.role = null;
       renderLogin();
-      subscribeHome(startHome, () => {
-        if (!sess.loggedIn) {
-          renderLogin();
-        } else {
-          renderApp();
-        }
-      });
+      subscribeHome(startHome);
     })();
   </script>
 </body>

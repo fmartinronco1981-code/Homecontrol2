@@ -21,6 +21,7 @@
       --green-soft: #d1fae5;
       --amber: #d97706;
       --amber-soft: #fef3c7;
+      --orange: #f97316;
       --red: #dc2626;
       --red-soft: #fee2e2;
       --radius: 18px;
@@ -196,6 +197,32 @@
       padding: 6px 12px;
       font-size: 12.5px;
       border-radius: 10px;
+    }
+
+    /* Selector de fecha para tareas especiales */
+    .date-picker-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .date-picker-box:focus-within {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+    }
+
+    .date-picker-box input[type="date"] {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
     }
 
     /* Login / Acceso */
@@ -383,7 +410,7 @@
       }
     }
 
-    /* Vista propietario: Turnos (Izquierda turnos, Derecha calendario) y Mes/Pago (Izquierda calendario, Derecha cierre) */
+    /* Vista propietario: Turnos y Mes/Pago */
     .owner-shifts-layout,
     .owner-pay-layout {
       display: grid;
@@ -412,7 +439,7 @@
       }
     }
 
-    /* Compactación vertical en tablet / apaisado para ver el mes entero sin scroll vertical */
+    /* Compactación vertical en tablet / apaisado */
     body.tablet-mode .app-shell {
       padding-top: 8px;
       padding-bottom: 68px;
@@ -890,6 +917,25 @@
       color: #fff;
     }
 
+    /* Parpadeo naranja repetitivo en pestaña Chat mientras suena ti-ti */
+    @keyframes chatOrangePulse {
+      0%, 100% {
+        background-color: #f97316;
+        color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.42), 0 0 16px rgba(234, 88, 12, 0.8);
+      }
+      50% {
+        background-color: #fb923c;
+        color: #fff7ed;
+        box-shadow: 0 0 0 5px rgba(251, 146, 60, 0.52), 0 0 22px rgba(249, 115, 22, 0.95);
+      }
+    }
+
+    .dock-btn.chat-alert-blink {
+      animation: chatOrangePulse 0.6s ease-in-out infinite;
+      border: 1px solid #c2410c;
+    }
+
     /* Modal y Toast */
     .modal-bg {
       position: fixed;
@@ -948,7 +994,7 @@
   </style>
 </head>
 <body>
-    <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden"></div>
 
   <!-- PANTALLA DE ACCESO -->
   <div id="loginScreen" class="app-shell">
@@ -993,7 +1039,7 @@
       <div id="savedOwnerChips" class="row-wrap"></div>
 
       <input type="text" id="ownerNameInput" placeholder="Tu nombre (ej: Fran, Cris, Pepe...)" />
-      <input type="password" id="ownerPassInput" placeholder="Tu contraseña de perfil / hogar" />
+      <input type="password" id="ownerPassInput" placeholder="Contraseña obligatoria del propietario" required />
 
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
         <button type="button" class="btn-soft btn-sm" id="saveOwnerProfileBtn">Guardar perfil</button>
@@ -1081,7 +1127,7 @@
     <div id="empViewChat" class="card hidden">
       <div class="card-title">
         <span id="empChatHeader">Chat</span>
-        <span class="muted">Pendiente de Firebase</span>
+        <span class="muted">Tiempo real</span>
       </div>
       <div class="chat-wrap">
         <div class="chat-list" id="empChatList"></div>
@@ -1095,7 +1141,7 @@
     <div class="bottom-dock">
       <button type="button" class="dock-btn active" data-emp-nav="fichar">Fichar / Tareas</button>
       <button type="button" class="dock-btn" data-emp-nav="cal">Calendario</button>
-      <button type="button" class="dock-btn" data-emp-nav="chat">Chat</button>
+      <button type="button" class="dock-btn" data-emp-nav="chat" id="empNavChatBtn">Chat</button>
     </div>
   </div>
 
@@ -1110,7 +1156,6 @@
       <div class="top-actions">
         <button type="button" class="top-pill" id="topBtnEmployees">Empleadas</button>
         <button type="button" class="top-pill" id="topBtnPay">Mes / Pago</button>
-        <button type="button" class="top-pill" id="topBtnLink">Enlace</button>
         <button type="button" class="top-pill view-toggle-btn">Móvil</button>
         <button type="button" class="top-pill exit-pill logout-btn">Salir</button>
       </div>
@@ -1191,7 +1236,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
           <span class="section-kicker" style="margin:0;">Cierre y pago del mes</span>
           <div class="row-wrap" style="gap:6px;">
-            <button type="button" class="btn-soft btn-sm" id="reopenMonthPayBtn">Reabrir</button>
+            <button type="button" class="btn-amber btn-sm" id="reopenMonthPayBtn">Reabrir mes</button>
             <button type="button" class="btn-soft btn-sm" id="openPayHistoryBtn">Histórico</button>
           </div>
         </div>
@@ -1253,6 +1298,14 @@
       <div class="card stack">
         <div class="section-kicker" style="margin:0;">Asignar tarea especial</div>
         <select id="taskEmpSelect"></select>
+        <div class="field-lbl">
+          <span>Fecha de la tarea</span>
+          <div class="date-picker-box" id="specialTaskDateBox" tabindex="0" role="button" aria-label="Seleccionar fecha de la tarea">
+            <span id="specialTaskDateDisplay" style="font-weight:700; color:var(--text);"></span>
+            <button type="button" class="btn-soft btn-sm" id="btnOpenTaskCalendar" style="min-height:32px; padding:4px 10px;">📅 Fecha</button>
+            <input type="date" id="specialTaskDateInput" />
+          </div>
+        </div>
         <input type="text" id="specialTaskInput" placeholder="Ej: Limpiar hornos o cambiar sábanas" />
         <button type="button" class="btn-blue" id="assignSpecialTaskBtn">Asignar tarea</button>
       </div>
@@ -1269,7 +1322,7 @@
     <div id="ownerBotChatView" class="card hidden">
       <div class="card-title">
         <span id="ownerChatHeader">Chat</span>
-        <span class="muted">Pendiente de Firebase</span>
+        <span class="muted">Tiempo real</span>
       </div>
       <div class="chat-wrap">
         <div class="chat-list" id="ownerChatList"></div>
@@ -1283,7 +1336,7 @@
     <div class="bottom-dock">
       <button type="button" class="dock-btn active" data-own-nav="shifts">Turnos</button>
       <button type="button" class="dock-btn" data-own-nav="tasks">Tareas</button>
-      <button type="button" class="dock-btn" data-own-nav="chat">Chat</button>
+      <button type="button" class="dock-btn" data-own-nav="chat" id="ownerNavChatBtn">Chat</button>
     </div>
   </div>
 
@@ -1297,11 +1350,13 @@
     (function () {
       "use strict";
 
-      const STATE_KEY_PREFIX = "hc_home_state_v4_";
+      const STATE_KEY_PREFIX = "hc_home_state_v5_";
+      const LEGACY_STATE_KEY_V4 = "hc_home_state_v4_";
       const LEGACY_STATE_KEY = "hc_visual_state_v2";
       const PROFILES_KEY = "hc_user_profiles_v4";
       const SESSION_KEY = "hc_visual_session_v4";
       const VIEW_KEY = "hc_view_mode_v2";
+      const HOME_ALIAS_MAP_KEY = "hc_home_alias_map_v1";
 
       function pad2(n) {
         return String(Math.floor(Math.abs(Number(n) || 0))).padStart(2, "0");
@@ -1356,16 +1411,48 @@
         return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
       }
 
+      function formatMonthLabelYM(ym) {
+        const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
+        if (!m) return String(ym || "");
+        const dt = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+        if (isNaN(dt.getTime())) return String(ym);
+        return dt.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+      }
+
+      function sanitizePaidDateDMY(rawDate, fallbackTs) {
+        const s = String(rawDate || "").trim();
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDMY(s);
+        const num = Number(s);
+        if (!isNaN(num) && num > 100000000) return formatDMY(num);
+        if (fallbackTs && !isNaN(Number(fallbackTs))) return formatDMY(Number(fallbackTs));
+        return formatDMY(todayISO());
+      }
+
       function toast(msg) {
         const el = document.getElementById("toast");
+        if (!el) return;
         el.textContent = msg;
         el.classList.remove("hidden");
         clearTimeout(toast._t);
-        toast._t = setTimeout(() => el.classList.add("hidden"), 2200);
+        toast._t = setTimeout(() => el.classList.add("hidden"), 2400);
+      }
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
       }
 
       function normalizeCode(code) {
-        const clean = String(code || "MARTIN").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        const raw = String(code || "").trim();
+        if (!raw) return "MARTIN";
+        if (raw.includes("__")) {
+          return raw.replace(/[^A-Za-z0-9_.-]/g, "");
+        }
+        const clean = raw.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
         return clean || "MARTIN";
       }
 
@@ -1373,15 +1460,46 @@
         return STATE_KEY_PREFIX + normalizeCode(code);
       }
 
+      // Conversión automática de arrays antiguos o diccionarios a mapa normalizado por ID
+      function toIdMap(val, idPrefix = "item") {
+        const out = {};
+        if (!val) return out;
+        if (Array.isArray(val)) {
+          val.forEach((item, idx) => {
+            if (item && typeof item === "object") {
+              const id = String(item.id || `${idPrefix}_${idx}_${Number(item.ts || item.startTs || Date.now())}`);
+              out[id] = { ...item, id };
+            }
+          });
+          return out;
+        }
+        if (typeof val === "object") {
+          Object.keys(val).forEach((k) => {
+            const item = val[k];
+            if (item && typeof item === "object") {
+              const id = String(item.id || k);
+              out[id] = { ...item, id };
+            }
+          });
+        }
+        return out;
+      }
+
+      function mapValuesSorted(mapObj, sortFn) {
+        const arr = Object.values(mapObj || {}).filter((x) => x && typeof x === "object");
+        return typeof sortFn === "function" ? arr.sort(sortFn) : arr;
+      }
+
       function getEmptyHomeState(code = "MARTIN") {
         const cleanCode = normalizeCode(code);
         return {
           homeCode: cleanCode,
+          homeAlias: cleanCode.includes("__") ? cleanCode.split("__")[0] : cleanCode,
           masterPass: "1234",
           updatedAt: Date.now(),
           employees: {},
-          shifts: [],
-          tasks: [],
+          shifts: {},
+          tasks: {},
           chats: {},
           closures: {}
         };
@@ -1396,6 +1514,7 @@
         const now = Date.now();
         return {
           homeCode: "MARTIN",
+          homeAlias: "MARTIN",
           masterPass: "1234",
           updatedAt: now,
           employees: {
@@ -1414,30 +1533,33 @@
               dailyHours: 4
             }
           },
-          shifts: [
-            {
+          shifts: {
+            sh_demo_1: {
               id: "sh_demo_1",
               employeeId: "emp_wendy",
               dateISO: tISO,
               startTs: now - 2 * 3600 * 1000,
               endTs: now - 30 * 60 * 1000,
-              status: "confirmed"
+              status: "confirmed",
+              updatedAt: now - 1800000
             }
-          ],
-          tasks: [
-            {
+          },
+          tasks: {
+            tk_demo_1: {
               id: "tk_demo_1",
               employeeId: "emp_wendy",
               dateISO: tISO,
               title: "Revisar cocina y salón",
-              done: false
+              done: false,
+              createdAt: now - 1800000,
+              updatedAt: now - 1800000
             }
-          ],
+          },
           chats: {
-            emp_wendy: [
-              { id: "m1", sender: "sys", name: "Sistema", text: "Chat local listo.", ts: now - 3600000 }
-            ],
-            emp_ana: []
+            emp_wendy: {
+              m1: { id: "m1", sender: "sys", name: "Sistema", text: "Chat listo.", ts: now - 3600000 }
+            },
+            emp_ana: {}
           },
           closures: {}
         };
@@ -1478,14 +1600,15 @@
         if (!cleanName) return null;
         const cleanRole = role === "employee" ? "employee" : "owner";
         const cleanHome = normalizeCode(homeCode);
-        const passToHash = String(rawPass || "").trim() || (cleanRole === "owner" ? "1234" : cleanName);
+        const trimmedPass = String(rawPass || "").trim();
         const idx = userProfiles.findIndex((u) => u.name.toLowerCase() === cleanName.toLowerCase() && u.role === cleanRole);
+        const passToHash = trimmedPass || (idx >= 0 ? "" : (cleanRole === "owner" ? "1234" : cleanName));
         const entry = {
           id: idx >= 0 ? userProfiles[idx].id : ("usr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5)),
           name: cleanName,
           role: cleanRole,
           homeCode: cleanHome,
-          passHash: idx >= 0 && !String(rawPass || "").trim() ? userProfiles[idx].passHash : hashPass(passToHash)
+          passHash: passToHash ? hashPass(passToHash) : userProfiles[idx].passHash
         };
         if (idx >= 0) {
           userProfiles[idx] = entry;
@@ -1497,10 +1620,399 @@
       }
 
       function verifyProfilePassword(profile, rawPass) {
-        if (!profile) return true;
         const entered = String(rawPass || "").trim();
-        if (!entered) return true;
-        return hashPass(entered) === profile.passHash || entered === profile.name;
+        if (!entered) return false;
+        if (profile && profile.passHash) {
+          return hashPass(entered) === profile.passHash;
+        }
+        const fallbackMaster = String((db && db.masterPass) || "1234").trim();
+        return entered === fallbackMaster || hashPass(entered) === hashPass(fallbackMaster);
+      }
+
+      // Validación estricta de contraseña de administrador para acciones sensibles (borrar empleada)
+      function isStrictAdminPasswordValid(rawPass) {
+        const entered = String(rawPass || "").trim();
+        if (!entered) return false;
+        const currentOwnerName = String((sess && sess.ownerName) || "").trim().toLowerCase();
+        const ownerProfile = (userProfiles || []).find(
+          (u) => u && u.role === "owner" && String(u.name || "").trim().toLowerCase() === currentOwnerName
+        );
+        if (ownerProfile && ownerProfile.passHash) {
+          return hashPass(entered) === ownerProfile.passHash;
+        }
+        const masterPass = String((db && db.masterPass) || "1234").trim();
+        return entered === masterPass || hashPass(entered) === hashPass(masterPass);
+      }
+
+      // Identificador único de pestaña/dispositivo para evitar eco sonoro en el emisor
+      const CLIENT_INSTANCE_ID = "cli_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+      const seenAlertMessageIds = new Set();
+      let hasInitializedAlertBaseline = false;
+
+      // --- Desbloqueo automático de AudioContext + Patrón repetitivo "ti-ti, ti-ti, ti-ti, ti-ti" ---
+      let audioCtxRef = null;
+      let chatAlertActive = false;
+      let chatTiTiTimer = null;
+
+      function getAudioContext() {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return null;
+          if (!audioCtxRef) {
+            audioCtxRef = new Ctx();
+          }
+          if (audioCtxRef.state === "suspended") {
+            audioCtxRef.resume().catch(() => {});
+          }
+          return audioCtxRef;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function unlockAudioOnFirstGesture() {
+        const unlock = () => {
+          const ctx = getAudioContext();
+          if (ctx && ctx.state === "suspended") {
+            ctx.resume().catch(() => {});
+          }
+          if (ctx && ctx.state === "running") {
+            ["pointerdown", "touchstart", "keydown", "click"].forEach((ev) => {
+              window.removeEventListener(ev, unlock, true);
+            });
+          }
+        };
+        ["pointerdown", "touchstart", "keydown", "click"].forEach((ev) => {
+          window.addEventListener(ev, unlock, true);
+        });
+      }
+
+      function playToneSequence(freqs, stepMs = 90, type = "sine", gainPeak = 0.16) {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const schedule = () => {
+          try {
+            const now = ctx.currentTime;
+            freqs.forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = type;
+              osc.frequency.setValueAtTime(freq, now + (idx * stepMs) / 1000);
+              const startT = now + (idx * stepMs) / 1000;
+              const durT = Math.max(0.045, (stepMs * 0.72) / 1000);
+              gain.gain.setValueAtTime(0.0001, startT);
+              gain.gain.exponentialRampToValueAtTime(gainPeak, startT + 0.01);
+              gain.gain.exponentialRampToValueAtTime(0.0001, startT + durT);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(startT);
+              osc.stop(startT + durT + 0.02);
+            });
+          } catch (_) {}
+        };
+        if (ctx.state === "suspended") {
+          ctx.resume().then(schedule).catch(() => {});
+        } else {
+          schedule();
+        }
+      }
+
+      function playPunchInLocalTone() {
+        playToneSequence([587.33, 880], 85, "triangle", 0.16);
+      }
+
+      function playPunchOutLocalTone() {
+        playToneSequence([783.99, 523.25], 95, "triangle", 0.16);
+      }
+
+      // Patrón repetitivo "ti-ti, ti-ti, ti-ti, ti-ti"
+      function playTiTiQuadPattern() {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const schedule = () => {
+          try {
+            const base = ctx.currentTime;
+            const beepDur = 0.065;
+            const pairGap = 0.14;
+            const groupGap = 0.34;
+            const groups = 4;
+            const beepsPerGroup = 2;
+
+            for (let g = 0; g < groups; g++) {
+              const groupStart = base + g * groupGap;
+              for (let b = 0; b < beepsPerGroup; b++) {
+                const t0 = groupStart + b * pairGap;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = "square";
+                osc.frequency.setValueAtTime(b === 0 ? 1046.5 : 1318.5, t0);
+                gain.gain.setValueAtTime(0.0001, t0);
+                gain.gain.exponentialRampToValueAtTime(0.13, t0 + 0.008);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + beepDur);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(t0);
+                osc.stop(t0 + beepDur + 0.015);
+              }
+            }
+          } catch (_) {}
+        };
+        if (ctx.state === "suspended") {
+          ctx.resume().then(schedule).catch(() => {});
+        } else {
+          schedule();
+        }
+      }
+
+      function updateChatTabBlinkVisual() {
+        const empChatBtn = document.getElementById("empNavChatBtn");
+        const ownChatBtn = document.getElementById("ownerNavChatBtn");
+        const isViewingEmpChat = sess.loggedIn && sess.role === "employee" && sess.empTab === "chat";
+        const isViewingOwnChat = sess.loggedIn && sess.role === "owner" && !sess.ownerTopOverlay && sess.ownerBottomTab === "chat";
+
+        if (isViewingEmpChat || isViewingOwnChat) {
+          stopChatAlert();
+          return;
+        }
+
+        if (empChatBtn) {
+          empChatBtn.classList.toggle("chat-alert-blink", chatAlertActive);
+        }
+        if (ownChatBtn) {
+          ownChatBtn.classList.toggle("chat-alert-blink", chatAlertActive);
+        }
+      }
+
+      function startChatTiTiLoop() {
+        chatAlertActive = true;
+        updateChatTabBlinkVisual();
+        playTiTiQuadPattern();
+
+        if (chatTiTiTimer) {
+          clearInterval(chatTiTiTimer);
+        }
+        chatTiTiTimer = setInterval(() => {
+          if (!chatAlertActive) {
+            clearInterval(chatTiTiTimer);
+            chatTiTiTimer = null;
+            return;
+          }
+          playTiTiQuadPattern();
+        }, 1700);
+      }
+
+      function stopChatAlert() {
+        chatAlertActive = false;
+        if (chatTiTiTimer) {
+          clearInterval(chatTiTiTimer);
+          chatTiTiTimer = null;
+        }
+        const empChatBtn = document.getElementById("empNavChatBtn");
+        const ownChatBtn = document.getElementById("ownerNavChatBtn");
+        if (empChatBtn) empChatBtn.classList.remove("chat-alert-blink");
+        if (ownChatBtn) ownChatBtn.classList.remove("chat-alert-blink");
+      }
+
+      function getCurrentActorIdentity() {
+        if (sess.role === "employee") {
+          const emp = db.employees && db.employees[sess.employeeId];
+          return {
+            role: "emp",
+            name: (emp && emp.name) || "Empleada",
+            clientId: CLIENT_INSTANCE_ID
+          };
+        }
+        return {
+          role: "owner",
+          name: sess.ownerName || "Propietario",
+          clientId: CLIENT_INSTANCE_ID
+        };
+      }
+
+      // Reglas exactas de sonido y alerta por destinatario
+      function shouldPlayBeepForMessage(msg, empChannelId) {
+        if (!msg || typeof msg !== "object") return false;
+        if (!sess.loggedIn || !sess.role) return false;
+
+        // Nunca sonar en la instancia/pestaña que originó el evento
+        if (msg.actorClientId && String(msg.actorClientId) === CLIENT_INSTANCE_ID) {
+          return false;
+        }
+
+        const myRole = sess.role === "employee" ? "emp" : "owner";
+        const myName = myRole === "emp"
+          ? String((db.employees && db.employees[sess.employeeId] && db.employees[sess.employeeId].name) || "").trim().toLowerCase()
+          : String(sess.ownerName || "").trim().toLowerCase();
+
+        // Si soy empleada, solo me conciernen mensajes del canal de mi propio empId
+        if (myRole === "emp" && empChannelId && String(empChannelId) !== String(sess.employeeId)) {
+          return false;
+        }
+
+        const target = String(msg.alertTarget || "");
+        const actorRole = String(msg.actorRole || (msg.sender === "emp" ? "emp" : (msg.sender === "owner" ? "owner" : "")));
+        const actorName = String(msg.actorName || msg.name || "").trim().toLowerCase();
+
+        if (target === "owners") {
+          return myRole === "owner";
+        }
+
+        if (target === "all_except_sender") {
+          if (actorRole === "emp") {
+            return myRole === "owner";
+          }
+          if (actorRole === "owner") {
+            if (myRole === "owner" && myName && actorName && myName === actorName) {
+              return false;
+            }
+            return true;
+          }
+        }
+
+        if (actorRole === "emp") {
+          return myRole === "owner";
+        }
+
+        if (actorRole === "owner") {
+          if (myRole === "owner" && myName && actorName && myName === actorName) {
+            return false;
+          }
+          return true;
+        }
+
+        return false;
+      }
+
+      function registerAlertBaseline(chatsObj) {
+        if (!chatsObj || typeof chatsObj !== "object") return;
+        Object.values(chatsObj).forEach((bucket) => {
+          const list = Array.isArray(bucket) ? bucket : Object.values(bucket || {});
+          list.forEach((m) => {
+            if (m && m.id) seenAlertMessageIds.add(String(m.id));
+          });
+        });
+        hasInitializedAlertBaseline = true;
+      }
+
+      function inspectNewChatMessagesForAlerts(chatsObj) {
+        if (!chatsObj || typeof chatsObj !== "object") return;
+        if (!hasInitializedAlertBaseline) {
+          registerAlertBaseline(chatsObj);
+          return;
+        }
+
+        let anyShouldBeep = false;
+        Object.keys(chatsObj).forEach((empChannelId) => {
+          const bucket = chatsObj[empChannelId];
+          if (!bucket) return;
+          const list = Array.isArray(bucket) ? bucket : Object.values(bucket);
+          list.forEach((m) => {
+            if (!m || !m.id) return;
+            const mid = String(m.id);
+            if (!seenAlertMessageIds.has(mid)) {
+              seenAlertMessageIds.add(mid);
+              if (shouldPlayBeepForMessage(m, empChannelId)) {
+                anyShouldBeep = true;
+              }
+            }
+          });
+        });
+
+        if (anyShouldBeep) {
+          startChatTiTiLoop();
+        }
+      }
+
+      function createChatMessageObject(empId, { sender, name, text, alertTarget, actorRole, actorName }) {
+        const now = Date.now();
+        const msgId = "m_" + now + "_" + Math.random().toString(36).slice(2, 7);
+        const actor = getCurrentActorIdentity();
+        const msg = {
+          id: msgId,
+          sender: sender || actor.role,
+          name: name || actor.name,
+          text: String(text || ""),
+          ts: now,
+          alertTarget: alertTarget || "all_except_sender",
+          actorClientId: CLIENT_INSTANCE_ID,
+          actorRole: actorRole || actor.role,
+          actorName: actorName || actor.name
+        };
+        seenAlertMessageIds.add(msgId);
+        if (!db.chats) db.chats = {};
+        if (!db.chats[empId] || Array.isArray(db.chats[empId])) {
+          db.chats[empId] = toIdMap(db.chats[empId], "m");
+        }
+        db.chats[empId][msgId] = msg;
+        return msg;
+      }
+
+      // --- Aislamiento multi-casa con ID único aleatorio en Firebase + Alias visible ---
+      let homeAliasMap = {};
+      try {
+        homeAliasMap = JSON.parse(localStorage.getItem(HOME_ALIAS_MAP_KEY) || "{}") || {};
+      } catch (_) {
+        homeAliasMap = {};
+      }
+
+      function saveHomeAliasMap() {
+        try {
+          localStorage.setItem(HOME_ALIAS_MAP_KEY, JSON.stringify(homeAliasMap));
+        } catch (_) {}
+      }
+
+      function generateUniqueFirebaseHomeId(alias = "") {
+        const prefix = String(alias || "HOME").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "HOME";
+        let fbKey = "";
+        try {
+          if (rtdb) {
+            fbKey = rtdb.ref("homes").push().key || "";
+          }
+        } catch (_) {}
+        const randPart = Array.from({ length: 18 }, () =>
+          "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"[Math.floor(Math.random() * 60)]
+        ).join("");
+        const tsPart = Date.now().toString(36);
+        return `${prefix}__${fbKey || randPart}_${tsPart}_${randPart.slice(0, 10)}`;
+      }
+
+      function isUniqueHomeId(val) {
+        return typeof val === "string" && val.includes("__") && val.length >= 16;
+      }
+
+      function getDisplayHomeName(stateObj = db) {
+        if (stateObj && String(stateObj.homeAlias || "").trim()) {
+          return String(stateObj.homeAlias).trim().toUpperCase();
+        }
+        const code = String((stateObj && stateObj.homeCode) || activeHomeCode || "MARTIN").trim();
+        if (code.includes("__")) {
+          return code.split("__")[0].toUpperCase() || "HOGAR";
+        }
+        return code.toUpperCase() || "MARTIN";
+      }
+
+      function resolveTargetHomeId(inputVal, createIfMissingAlias = false) {
+        const raw = String(inputVal || "").trim();
+        if (!raw) {
+          return db.homeCode || activeHomeCode || "MARTIN";
+        }
+        if (isUniqueHomeId(raw)) {
+          return raw;
+        }
+        const upperAlias = raw.toUpperCase();
+        if (upperAlias === "MARTIN" && !homeAliasMap["MARTIN"]) {
+          return "MARTIN";
+        }
+        if (homeAliasMap[upperAlias]) {
+          return homeAliasMap[upperAlias];
+        }
+        if (createIfMissingAlias) {
+          const newId = generateUniqueFirebaseHomeId(upperAlias);
+          homeAliasMap[upperAlias] = newId;
+          saveHomeAliasMap();
+          return newId;
+        }
+        return upperAlias;
       }
 
       let activeHomeCode = "MARTIN";
@@ -1530,20 +2042,117 @@
       let ownCalDate = new Date();
       ownCalDate.setDate(1);
 
+      let editingEmpId = null;
+
+      function normalizeHomeObject(raw, fallbackCode) {
+        const cleanCode = normalizeCode((raw && (raw.homeCode || (raw.meta && raw.meta.homeCode))) || fallbackCode || "MARTIN");
+        const base = getDefaultState(cleanCode);
+        if (!raw || typeof raw !== "object") {
+          return base;
+        }
+
+        const metaObj = raw.meta && typeof raw.meta === "object" ? raw.meta : {};
+        const rawEmps = raw.employees && typeof raw.employees === "object" ? raw.employees : {};
+        const mergedEmps = {};
+        Object.keys(rawEmps).forEach((eid) => {
+          const e = rawEmps[eid];
+          if (e && typeof e === "object") {
+            mergedEmps[eid] = {
+              id: String(e.id || eid),
+              name: String(e.name || eid),
+              pass: e.pass !== undefined && e.pass !== null ? String(e.pass) : String(e.name || eid),
+              rate: Number(e.rate) || 10,
+              dailyHours: Number(e.dailyHours) || 4
+            };
+          }
+        });
+
+        const rawShiftsMap = toIdMap(raw.shifts, "sh");
+        const cleanShiftsMap = {};
+        Object.keys(rawShiftsMap).forEach((sid) => {
+          const s = rawShiftsMap[sid];
+          if (s && s.employeeId && s.startTs) {
+            cleanShiftsMap[sid] = {
+              ...s,
+              id: sid,
+              employeeId: String(s.employeeId),
+              dateISO: String(s.dateISO || todayISO()),
+              startTs: Number(s.startTs),
+              endTs: s.endTs ? Number(s.endTs) : null,
+              status: String(s.status || "pending"),
+              updatedAt: Number(s.updatedAt || s.endTs || s.startTs || 0)
+            };
+          }
+        });
+
+        const rawTasksMap = toIdMap(raw.tasks, "tk");
+        const cleanTasksMap = {};
+        Object.keys(rawTasksMap).forEach((tid) => {
+          const t = rawTasksMap[tid];
+          if (t && t.employeeId && t.title) {
+            cleanTasksMap[tid] = {
+              ...t,
+              id: tid,
+              employeeId: String(t.employeeId),
+              dateISO: String(t.dateISO || todayISO()),
+              title: String(t.title),
+              done: Boolean(t.done),
+              createdAt: Number(t.createdAt || 0),
+              updatedAt: Number(t.updatedAt || t.createdAt || 0)
+            };
+          }
+        });
+
+        const mergedChats = {};
+        const rawChats = raw.chats && typeof raw.chats === "object" ? raw.chats : {};
+        const allChatEmpIds = new Set([...Object.keys(mergedEmps), ...Object.keys(rawChats)]);
+        allChatEmpIds.forEach((eid) => {
+          mergedChats[eid] = toIdMap(rawChats[eid], "m");
+        });
+
+        const cleanClosures = {};
+        if (raw.closures && typeof raw.closures === "object") {
+          Object.keys(raw.closures).forEach((k) => {
+            if (raw.closures[k] && typeof raw.closures[k] === "object") {
+              cleanClosures[k] = raw.closures[k];
+            }
+          });
+        }
+
+        const finalEmps = raw.employees === undefined ? base.employees : mergedEmps;
+        const resolvedAlias = String(metaObj.homeAlias || raw.homeAlias || (cleanCode.includes("__") ? cleanCode.split("__")[0] : cleanCode));
+        const resolvedUpdatedAt = Math.max(Number(metaObj.updatedAt || 0), Number(raw.updatedAt || 0));
+
+        return {
+          homeCode: cleanCode,
+          homeAlias: resolvedAlias,
+          masterPass: String(metaObj.masterPass || raw.masterPass || base.masterPass),
+          updatedAt: resolvedUpdatedAt,
+          employees: finalEmps,
+          shifts: cleanShiftsMap,
+          tasks: cleanTasksMap,
+          chats: mergedChats,
+          closures: cleanClosures
+        };
+      }
+
       function loadHomeState(code) {
         const cleanCode = normalizeCode(code);
         try {
           const raw = localStorage.getItem(homeStorageKey(cleanCode));
           if (raw) {
-            const parsed = JSON.parse(raw);
-            return Object.assign(getEmptyHomeState(cleanCode), parsed, { homeCode: cleanCode });
+            return normalizeHomeObject(JSON.parse(raw), cleanCode);
+          }
+          const legacyV4 = localStorage.getItem(LEGACY_STATE_KEY_V4 + cleanCode);
+          if (legacyV4) {
+            return normalizeHomeObject(JSON.parse(legacyV4), cleanCode);
           }
           if (cleanCode === "MARTIN") {
             const legacyRaw = localStorage.getItem(LEGACY_STATE_KEY);
             if (legacyRaw) {
               const legacyParsed = JSON.parse(legacyRaw);
               if (normalizeCode(legacyParsed.homeCode || "MARTIN") === "MARTIN") {
-                return Object.assign(getDefaultState("MARTIN"), legacyParsed, { homeCode: "MARTIN" });
+                return normalizeHomeObject(legacyParsed, "MARTIN");
               }
             }
           }
@@ -1562,16 +2171,12 @@
         } catch (_) {}
       }
 
-      function saveState() {
-        db.updatedAt = Date.now();
-        persistHomeLocalOnly(db);
-        pushStateToFirebase();
-      }
-
-      function refreshNow() {
-        saveSession();
-        persistHomeLocalOnly(db);
-        renderApp();
+      function saveSession() {
+        try {
+          const str = JSON.stringify(sess);
+          sessionStorage.setItem(SESSION_KEY, str);
+          localStorage.setItem(SESSION_KEY, str);
+        } catch (_) {}
       }
 
       function loadSession() {
@@ -1583,15 +2188,8 @@
         }
       }
 
-      function saveSession() {
-        try {
-          const str = JSON.stringify(sess);
-          sessionStorage.setItem(SESSION_KEY, str);
-          localStorage.setItem(SESSION_KEY, str);
-        } catch (_) {}
-      }
-
       function clearSession() {
+        stopChatAlert();
         sess.loggedIn = false;
         sess.role = null;
         sess.ownerTopOverlay = null;
@@ -1601,30 +2199,316 @@
         } catch (_) {}
       }
 
-      function loadProfiles() {
+      function refreshNow() {
+        saveSession();
+        persistHomeLocalOnly(db);
+        renderApp();
+      }
+
+      // --- Escrituras atómicas en Firebase Realtime Database ---
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDYZFEZOYVwZmRnP9GYlYHz-vuEceD3O84",
+        authDomain: "homecontrol-casa.firebaseapp.com",
+        databaseURL: "https://homecontrol-casa-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "homecontrol-casa",
+        storageBucket: "homecontrol-casa.firebasestorage.app",
+        messagingSenderId: "959693944882",
+        appId: "1:959693944882:web:775071a8e58966e6dda42b",
+        measurementId: "G-1CKQ3HCX9W"
+      };
+
+      let rtdb = null;
+      let fbSubscribedCode = null;
+      let fbRef = null;
+      let isApplyingRemote = false;
+
+      function initFirebaseCompat() {
         try {
-          const raw = localStorage.getItem(PROFILES_KEY);
-          if (raw) {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr) && arr.length) return arr;
+          if (window.firebase && firebase.apps && !firebase.apps.length) {
+            firebase.initializeApp(FIREBASE_CONFIG);
           }
-        } catch (_) {}
-        return ["Fran", "Cris"];
-      }
-
-      function saveProfiles() {
-        try {
-          localStorage.setItem(PROFILES_KEY, JSON.stringify(ownerProfiles));
-        } catch (_) {}
-      }
-
-      function rememberOwnerProfile(name) {
-        const clean = String(name || "").trim();
-        if (!clean) return;
-        if (!ownerProfiles.some((p) => p.toLowerCase() === clean.toLowerCase())) {
-          ownerProfiles.push(clean);
-          saveProfiles();
+          if (window.firebase && firebase.database) {
+            rtdb = firebase.database();
+          }
+        } catch (err) {
+          console.warn("Firebase init warning:", err);
         }
+      }
+
+      function fbHomeRef(code = db.homeCode || activeHomeCode) {
+        if (!rtdb) return null;
+        const cleanCode = normalizeCode(code);
+        return rtdb.ref("homes/" + cleanCode);
+      }
+
+      function fbWriteMeta(now = Date.now()) {
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("meta").update({
+          homeCode: db.homeCode,
+          homeAlias: getDisplayHomeName(db),
+          masterPass: db.masterPass || "1234",
+          updatedAt: now
+        }).catch(() => {});
+        root.child("updatedAt").set(now).catch(() => {});
+      }
+
+      function fbWriteShiftAtomic(shiftObj) {
+        if (!shiftObj || !shiftObj.id) return;
+        const now = Date.now();
+        const cleanShift = { ...shiftObj, updatedAt: now };
+        if (!db.shifts || Array.isArray(db.shifts)) db.shifts = toIdMap(db.shifts, "sh");
+        db.shifts[cleanShift.id] = cleanShift;
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("shifts/" + cleanShift.id).set(JSON.parse(JSON.stringify(cleanShift))).catch((err) => {
+          console.warn("Atomic shift write error:", err);
+        });
+        fbWriteMeta(now);
+      }
+
+      function fbWriteTaskAtomic(taskObj) {
+        if (!taskObj || !taskObj.id) return;
+        const now = Date.now();
+        const cleanTask = { ...taskObj, updatedAt: now };
+        if (!db.tasks || Array.isArray(db.tasks)) db.tasks = toIdMap(db.tasks, "tk");
+        db.tasks[cleanTask.id] = cleanTask;
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("tasks/" + cleanTask.id).set(JSON.parse(JSON.stringify(cleanTask))).catch((err) => {
+          console.warn("Atomic task write error:", err);
+        });
+        fbWriteMeta(now);
+      }
+
+      function fbRemoveTaskAtomic(taskId) {
+        if (!taskId) return;
+        const now = Date.now();
+        if (db.tasks && !Array.isArray(db.tasks)) {
+          delete db.tasks[taskId];
+        }
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("tasks/" + taskId).remove().catch((err) => {
+          console.warn("Atomic task remove error:", err);
+        });
+        fbWriteMeta(now);
+      }
+
+      function fbWriteChatMsgAtomic(empId, msgObj) {
+        if (!empId || !msgObj || !msgObj.id) return;
+        const now = Number(msgObj.ts || Date.now());
+        if (!db.chats) db.chats = {};
+        if (!db.chats[empId] || Array.isArray(db.chats[empId])) {
+          db.chats[empId] = toIdMap(db.chats[empId], "m");
+        }
+        db.chats[empId][msgObj.id] = msgObj;
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("chats/" + empId + "/" + msgObj.id).set(JSON.parse(JSON.stringify(msgObj))).catch((err) => {
+          console.warn("Atomic chat write error:", err);
+        });
+        fbWriteMeta(now);
+      }
+
+      function fbWriteEmployeeAtomic(empObj) {
+        if (!empObj || !empObj.id) return;
+        const now = Date.now();
+        if (!db.employees) db.employees = {};
+        db.employees[empObj.id] = empObj;
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("employees/" + empObj.id).set(JSON.parse(JSON.stringify(empObj))).catch((err) => {
+          console.warn("Atomic employee write error:", err);
+        });
+        fbWriteMeta(now);
+      }
+
+      function fbRemoveEmployeeAtomic(empId) {
+        if (!empId) return;
+        const now = Date.now();
+        if (db.employees) delete db.employees[empId];
+        if (db.chats) delete db.chats[empId];
+        if (db.shifts) {
+          Object.keys(db.shifts).forEach((sid) => {
+            if (db.shifts[sid] && String(db.shifts[sid].employeeId) === String(empId)) {
+              delete db.shifts[sid];
+            }
+          });
+        }
+        if (db.tasks) {
+          Object.keys(db.tasks).forEach((tid) => {
+            if (db.tasks[tid] && String(db.tasks[tid].employeeId) === String(empId)) {
+              delete db.tasks[tid];
+            }
+          });
+        }
+        if (db.closures) {
+          Object.keys(db.closures).forEach((ck) => {
+            if (String(ck).startsWith(String(empId) + "_")) {
+              delete db.closures[ck];
+            }
+          });
+        }
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("employees/" + empId).remove().catch(() => {});
+        root.child("chats/" + empId).remove().catch(() => {});
+        root.child("shifts").set(JSON.parse(JSON.stringify(db.shifts || {}))).catch(() => {});
+        root.child("tasks").set(JSON.parse(JSON.stringify(db.tasks || {}))).catch(() => {});
+        root.child("closures").set(JSON.parse(JSON.stringify(db.closures || {}))).catch(() => {});
+        fbWriteMeta(now);
+      }
+
+      function fbWriteClosureAtomic(closureKey, closureObj) {
+        if (!closureKey) return;
+        const now = Date.now();
+        if (!db.closures) db.closures = {};
+        db.closures[closureKey] = closureObj;
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("closures/" + closureKey).set(JSON.parse(JSON.stringify(closureObj))).catch(() => {});
+        fbWriteMeta(now);
+      }
+
+      function fbRemoveClosureAtomic(closureKey) {
+        if (!closureKey) return;
+        const now = Date.now();
+        if (db.closures) delete db.closures[closureKey];
+        db.updatedAt = now;
+        persistHomeLocalOnly(db);
+
+        const root = fbHomeRef();
+        if (!root || isApplyingRemote) return;
+        root.child("closures/" + closureKey).remove().catch(() => {});
+        fbWriteMeta(now);
+      }
+
+      function pushFullNormalizedHomeToFirebase(stateObj = db) {
+        const root = fbHomeRef(stateObj.homeCode);
+        if (!root || isApplyingRemote) return;
+        const payload = {
+          homeCode: stateObj.homeCode,
+          homeAlias: getDisplayHomeName(stateObj),
+          masterPass: stateObj.masterPass || "1234",
+          updatedAt: Number(stateObj.updatedAt || Date.now()),
+          meta: {
+            homeCode: stateObj.homeCode,
+            homeAlias: getDisplayHomeName(stateObj),
+            masterPass: stateObj.masterPass || "1234",
+            updatedAt: Number(stateObj.updatedAt || Date.now())
+          },
+          employees: JSON.parse(JSON.stringify(stateObj.employees || {})),
+          shifts: JSON.parse(JSON.stringify(stateObj.shifts || {})),
+          tasks: JSON.parse(JSON.stringify(stateObj.tasks || {})),
+          chats: JSON.parse(JSON.stringify(stateObj.chats || {})),
+          closures: JSON.parse(JSON.stringify(stateObj.closures || {}))
+        };
+        root.set(payload).catch((err) => {
+          console.warn("Firebase full normalized sync warning:", err);
+        });
+      }
+
+      function subscribeHome(code, onInitialLoaded) {
+        const cleanCode = normalizeCode(code || db.homeCode || "MARTIN");
+        db.homeCode = cleanCode;
+        persistHomeLocalOnly(db);
+
+        if (!rtdb) {
+          registerAlertBaseline(db.chats);
+          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          return;
+        }
+
+        if (fbRef && fbSubscribedCode === cleanCode) {
+          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          return;
+        }
+
+        if (fbRef) {
+          try { fbRef.off(); } catch (_) {}
+          fbRef = null;
+        }
+
+        fbSubscribedCode = cleanCode;
+        hasInitializedAlertBaseline = false;
+        fbRef = rtdb.ref("homes/" + cleanCode);
+
+        let initialDone = false;
+
+        fbRef.on("value", (snap) => {
+          const val = snap.val();
+          isApplyingRemote = true;
+          try {
+            if (val) {
+              const hadLegacyArrays = Array.isArray(val.shifts) || Array.isArray(val.tasks) ||
+                (val.chats && Object.values(val.chats).some((c) => Array.isArray(c))) || !val.meta;
+
+              const remoteState = normalizeHomeObject(val, cleanCode);
+              db = remoteState;
+              persistHomeLocalOnly(db);
+
+              if (hadLegacyArrays) {
+                isApplyingRemote = false;
+                pushFullNormalizedHomeToFirebase(db);
+                isApplyingRemote = true;
+              }
+            } else {
+              const localState = loadHomeState(cleanCode);
+              db = normalizeHomeObject(localState, cleanCode);
+              persistHomeLocalOnly(db);
+              isApplyingRemote = false;
+              pushFullNormalizedHomeToFirebase(db);
+              isApplyingRemote = true;
+            }
+
+            if (initialDone && sess.loggedIn) {
+              inspectNewChatMessagesForAlerts(db.chats);
+            } else {
+              registerAlertBaseline(db.chats);
+            }
+
+            if (sess.loggedIn && normalizeCode(db.homeCode) === cleanCode) {
+              renderApp();
+            }
+          } finally {
+            isApplyingRemote = false;
+          }
+
+          if (!initialDone) {
+            initialDone = true;
+            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          }
+        }, (err) => {
+          console.warn("Firebase listener error:", err);
+          if (!initialDone) {
+            initialDone = true;
+            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
+          }
+        });
       }
 
       function applyViewMode() {
@@ -1657,6 +2541,14 @@
         try {
           localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedOvertime));
         } catch (_) {}
+      }
+
+      function getAllShiftsList() {
+        return mapValuesSorted(db.shifts, (a, b) => Number(b.startTs || 0) - Number(a.startTs || 0));
+      }
+
+      function getAllTasksList() {
+        return mapValuesSorted(db.tasks, (a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
       }
 
       function shiftMinutes(sh, now = Date.now()) {
@@ -1706,7 +2598,7 @@
       }
 
       function getActiveShift(empId) {
-        return db.shifts.find((s) => s.employeeId === empId && s.status === "active") || null;
+        return getAllShiftsList().find((s) => s.employeeId === empId && s.status === "active") || null;
       }
 
       function renderLogin() {
@@ -1714,19 +2606,20 @@
         document.getElementById("empScreen").classList.add("hidden");
         document.getElementById("ownerScreen").classList.add("hidden");
 
-        document.getElementById("homeCodeInput").value = db.homeCode || "";
-        const empList = Object.values(db.employees);
+        document.getElementById("homeCodeInput").value = getDisplayHomeName(db) || "";
+        const empList = Object.values(db.employees || {});
         document.getElementById("empCountLabel").textContent = `${empList.length} disponibles`;
 
         const sel = document.getElementById("empLoginSelect");
-        sel.innerHTML = empList.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join("");
+        sel.innerHTML = empList.map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join("");
 
         const chipsWrap = document.getElementById("savedOwnerChips");
         const currentName = document.getElementById("ownerNameInput").value.trim();
         const ownersOnly = userProfiles.filter((u) => u.role === "owner");
         chipsWrap.innerHTML = ownersOnly.map((u) => {
           const isSel = currentName.toLowerCase() === u.name.toLowerCase();
-          return `<button type="button" class="profile-chip ${isSel ? "selected" : ""}" data-prof="${escapeHtml(u.name)}" data-prof-home="${escapeHtml(u.homeCode || "")}">👤 ${escapeHtml(u.name)}</button>`;
+          const dispHome = u.homeCode && u.homeCode.includes("__") ? u.homeCode.split("__")[0] : (u.homeCode || "");
+          return `<button type="button" class="profile-chip ${isSel ? "selected" : ""}" data-prof="${escapeHtml(u.name)}" data-prof-home="${escapeHtml(dispHome)}">👤 ${escapeHtml(u.name)}</button>`;
         }).join("");
 
         chipsWrap.querySelectorAll("[data-prof]").forEach((btn) => {
@@ -1758,10 +2651,11 @@
           document.getElementById("ownerScreen").classList.remove("hidden");
           renderOwnerScreen();
         }
+        updateChatTabBlinkVisual();
       }
 
       function renderEmployeeScreen() {
-        const emp = db.employees[sess.employeeId] || Object.values(db.employees)[0];
+        const emp = db.employees[sess.employeeId] || Object.values(db.employees || {})[0];
         if (!emp) {
           clearSession();
           renderLogin();
@@ -1821,38 +2715,13 @@
             topBanner.innerHTML = "";
           }
 
-          const empClosures = Object.keys(db.closures || {})
-            .filter((k) => k.startsWith(emp.id + "_"))
-            .map((k) => {
-              const lastUnd = k.lastIndexOf("_");
-              const ym = lastUnd > -1 ? k.slice(lastUnd + 1) : k;
-              const c = db.closures[k] || {};
-              return { ym, amount: Number(c.amount) || 0, paidDMY: sanitizePaidDateDMY(c.paidDMY, c.closedAt || c.ts) };
-            })
-            .sort((a, b) => b.ym.localeCompare(a.ym));
-
-          if (empClosures.length > 0 && (!active || !isOvertimeThreshold(active) || isAlertDismissed(active))) {
-            const latestC = empClosures[0];
-            topBanner.innerHTML = `
-              <span>Mes cerrado y pagado (${escapeHtml(formatMonthLabelYM(latestC.ym))}) · Fecha: <strong>${escapeHtml(latestC.paidDMY)}</strong> · Importe: <strong>${formatEur(latestC.amount)}</strong></span>
-              <button type="button" class="btn-soft btn-sm" id="empCloseClosureBannerBtn">OK</button>
-            `;
-            topBanner.classList.remove("hidden");
-            const okClosureBtn = document.getElementById("empCloseClosureBannerBtn");
-            if (okClosureBtn) {
-              okClosureBtn.onclick = () => {
-                topBanner.classList.add("hidden");
-              };
-            }
-          }
-
           const tISO = todayISO();
-          const todayMins = (db.shifts || [])
-            .filter((s) => s && s.employeeId === emp.id && s.dateISO === tISO)
+          const todayMins = getAllShiftsList()
+            .filter((s) => s.employeeId === emp.id && s.dateISO === tISO)
             .reduce((acc, s) => acc + shiftMinutes(s), 0);
           document.getElementById("empTodaySummary").textContent = `Hoy acumulado: ${formatHM(todayMins)}`;
 
-          const tasks = (db.tasks || []).filter((t) => t && String(t.employeeId) === String(emp.id) && t.dateISO === tISO);
+          const tasks = getAllTasksList().filter((t) => String(t.employeeId) === String(emp.id) && t.dateISO === tISO);
           const doneCount = tasks.filter((t) => t.done).length;
           document.getElementById("empTasksCounter").textContent = `${doneCount}/${tasks.length}`;
 
@@ -1863,35 +2732,37 @@
             listEl.innerHTML = tasks.map((t) => `
               <div class="task-row">
                 <label>
-                  <input type="checkbox" data-etask="${t.id}" ${t.done ? "checked" : ""} />
+                  <input type="checkbox" data-etask="${escapeHtml(t.id)}" ${t.done ? "checked" : ""} />
                   <span class="${t.done ? "done-text" : ""}">${escapeHtml(t.title)}</span>
                 </label>
               </div>
             `).join("");
             listEl.querySelectorAll("[data-etask]").forEach((cb) => {
               cb.onchange = () => {
-                const tk = db.tasks.find((x) => x.id === cb.getAttribute("data-etask"));
+                const tid = cb.getAttribute("data-etask");
+                const tk = db.tasks && db.tasks[tid];
                 if (tk) {
-                  tk.done = cb.checked;
-                  saveState();
+                  fbWriteTaskAtomic({ ...tk, done: cb.checked });
                   renderEmployeeScreen();
                 }
               };
-                         });
+            });
           }
         } else if (sess.empTab === "cal") {
           renderCalendarGridAndKpis(emp.id, empCalDate, "empMonthTitle", "empKpis", "empCalGrid", null, null);
         } else if (sess.empTab === "chat") {
+          stopChatAlert();
           document.getElementById("empChatHeader").textContent = `Chat · ${emp.name}`;
           renderChat("empChatList", emp.id, "emp");
         }
+        updateChatTabBlinkVisual();
       }
 
       function renderOwnerScreen() {
         document.getElementById("ownerTopName").textContent = sess.ownerName || "Propietario";
         document.getElementById("ownerTopHome").textContent = getDisplayHomeName(db);
 
-        const emps = Object.values(db.employees);
+        const emps = Object.values(db.employees || {});
         const sel = document.getElementById("ownerEmpSelect");
         if (!emps.length) {
           sess.selectedEmpId = null;
@@ -1900,7 +2771,7 @@
           if (!sess.selectedEmpId || !db.employees[sess.selectedEmpId]) {
             sess.selectedEmpId = emps[0].id;
           }
-          sel.innerHTML = emps.map((e) => `<option value="${e.id}" ${e.id === sess.selectedEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
+          sel.innerHTML = emps.map((e) => `<option value="${escapeHtml(e.id)}" ${e.id === sess.selectedEmpId ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("");
         }
 
         const isEmployeesTab = sess.ownerTopOverlay === "employees";
@@ -1941,7 +2812,7 @@
               null,
               (confMins, totalEur, ym) => {
                 const key = `${emp.id}_${ym}`;
-                const savedClosure = db.closures[key];
+                const savedClosure = db.closures && db.closures[key];
                 if (reopenBtn) {
                   reopenBtn.classList.toggle("hidden", !savedClosure);
                 }
@@ -1960,11 +2831,11 @@
                   amtInp.value = savedClosure ? Number(savedClosure.amount).toFixed(2) : totalEur.toFixed(2);
                 }
                 if (document.activeElement !== dtInp) {
-                  dtInp.value = savedClosure ? savedClosure.paidDMY : formatDMY(todayISO());
+                  dtInp.value = savedClosure ? sanitizePaidDateDMY(savedClosure.paidDMY, savedClosure.closedAt) : formatDMY(todayISO());
                 }
                 if (badgeEl) {
                   badgeEl.textContent = savedClosure
-                    ? `Cerrado y guardado: ${formatEur(savedClosure.amount)} el ${savedClosure.paidDMY}`
+                    ? `Cerrado y guardado: ${formatEur(savedClosure.amount)} el ${sanitizePaidDateDMY(savedClosure.paidDMY, savedClosure.closedAt)}`
                     : "Mes aún no cerrado";
                 }
               }
@@ -1977,9 +2848,11 @@
         } else if (sess.ownerBottomTab === "tasks") {
           renderOwnerTasks(emp);
         } else if (sess.ownerBottomTab === "chat") {
+          stopChatAlert();
           document.getElementById("ownerChatHeader").textContent = emp ? `Chat · ${emp.name}` : "Chat";
           renderChat("ownerChatList", empId, "owner");
         }
+        updateChatTabBlinkVisual();
       }
 
       function renderOwnerShiftsAndCalendar(emp) {
@@ -1998,13 +2871,14 @@
           return;
         }
 
+        const allShifts = getAllShiftsList();
         const topOwnBanner = document.getElementById("ownerTopAlertBanner");
-        const shifts = db.shifts.filter((s) => s.employeeId === emp.id && s.dateISO === targetISO);
+        const shifts = allShifts.filter((s) => s.employeeId === emp.id && s.dateISO === targetISO);
         const confMins = shifts.filter((s) => s.status === "confirmed").reduce((a, s) => a + shiftMinutes(s), 0);
         const pendMins = shifts.filter((s) => s.status === "pending").reduce((a, s) => a + shiftMinutes(s), 0);
         document.getElementById("ownerShiftsTotals").textContent = `Confirmado: ${formatHM(confMins)} · Pendiente: ${formatHM(pendMins)}`;
 
-        const allFlaggedShifts = db.shifts.filter((s) => isOvertimeThreshold(s));
+        const allFlaggedShifts = allShifts.filter((s) => isOvertimeThreshold(s));
         allFlaggedShifts.forEach((s) => checkAndNotifyOvertime(s));
 
         const visibleFlagged = allFlaggedShifts.filter((s) => !isAlertDismissed(s));
@@ -2066,8 +2940,8 @@
                 </div>
                 <div class="muted">Duración: <strong>${formatHM(mins)}</strong> · Tarifa: ${formatEur(emp.rate)}/h · Importe: <strong>${formatEur(eur)}</strong></div>
                 <div class="row-wrap">
-                  ${s.status === "pending" ? `<button type="button" class="btn-green btn-sm" data-confirm-sh="${s.id}">Confirmar</button>` : ""}
-                  <button type="button" class="btn-soft btn-sm" data-edit-sh="${s.id}">Ajustar</button>
+                  ${s.status === "pending" ? `<button type="button" class="btn-green btn-sm" data-confirm-sh="${escapeHtml(s.id)}">Confirmar</button>` : ""}
+                  <button type="button" class="btn-soft btn-sm" data-edit-sh="${escapeHtml(s.id)}">Ajustar</button>
                 </div>
               </div>
             `;
@@ -2075,22 +2949,29 @@
 
           listEl.querySelectorAll("[data-confirm-sh]").forEach((btn) => {
             btn.onclick = () => {
-              const sh = db.shifts.find((x) => x.id === btn.getAttribute("data-confirm-sh"));
+              const sid = btn.getAttribute("data-confirm-sh");
+              const sh = db.shifts && db.shifts[sid];
               if (sh) {
-                sh.status = "confirmed";
+                const confirmedShift = { ...sh, status: "confirmed" };
+                fbWriteShiftAtomic(confirmedShift);
+
                 const confBy = sess.ownerName || "Propietario";
-                const shDate = sh.dateISO ? formatDMY(sh.dateISO) : formatDMY(todayISO());
-                const inTime = formatHHMM(sh.startTs);
-                const outTime = sh.endTs ? formatHHMM(sh.endTs) : "--:--";
-                const durTxt = formatHM(shiftMinutes(sh));
-                broadcastEventToOwnersAndEmployee(
-                  sh.employeeId,
-                  `Turno confirmado (${shDate}) · Entrada ${inTime} – Salida ${outTime} (${durTxt}) por ${confBy}`,
-                  { soundAlert: true }
-                );
-                db.updatedAt = Date.now();
+                const shDate = confirmedShift.dateISO ? formatDMY(confirmedShift.dateISO) : formatDMY(todayISO());
+                const inTime = formatHHMM(confirmedShift.startTs);
+                const outTime = confirmedShift.endTs ? formatHHMM(confirmedShift.endTs) : "--:--";
+                const durTxt = formatHM(shiftMinutes(confirmedShift));
+
+                const msg = createChatMessageObject(confirmedShift.employeeId, {
+                  sender: "owner",
+                  name: confBy,
+                  text: `Turno confirmado (${shDate}) · Entrada ${inTime} – Salida ${outTime} (${durTxt}) por ${confBy}`,
+                  alertTarget: "all_except_sender",
+                  actorRole: "owner",
+                  actorName: confBy
+                });
+                fbWriteChatMsgAtomic(confirmedShift.employeeId, msg);
+
                 refreshNow();
-                pushStateToFirebase();
                 toast("Turno confirmado.");
               }
             };
@@ -2112,6 +2993,36 @@
         );
       }
 
+      function openDatePicker(inputEl) {
+        if (!inputEl) return;
+        try {
+          inputEl.focus({ preventScroll: true });
+        } catch (_) {
+          try { inputEl.focus(); } catch (_) {}
+        }
+        if (typeof inputEl.showPicker === "function") {
+          try {
+            inputEl.showPicker();
+            return;
+          } catch (_) {}
+        }
+        try {
+          inputEl.click();
+        } catch (_) {}
+      }
+
+      function syncTaskDateControls(isoDate) {
+        const cleanISO = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || "")) ? isoDate : todayISO();
+        const dateInp = document.getElementById("specialTaskDateInput");
+        const dateDisp = document.getElementById("specialTaskDateDisplay");
+        if (dateInp && dateInp.value !== cleanISO) {
+          dateInp.value = cleanISO;
+        }
+        if (dateDisp) {
+          dateDisp.textContent = formatDMY(cleanISO);
+        }
+      }
+
       function renderOwnerTasks(emp) {
         const emps = Object.values(db.employees || {});
         const taskEmpSel = document.getElementById("taskEmpSelect");
@@ -2131,7 +3042,7 @@
           ? `TAREAS ASIGNADAS · ${activeEmp.name.toUpperCase()} (${formatDMY(filterISO)})`
           : "TAREAS ASIGNADAS";
 
-        const filtered = (db.tasks || []).filter((t) => t.employeeId === activeEmpId && t.dateISO === filterISO);
+        const filtered = getAllTasksList().filter((t) => t.employeeId === activeEmpId && t.dateISO === filterISO);
         document.getElementById("assignedTasksCount").textContent = String(filtered.length);
 
         const listEl = document.getElementById("assignedTasksList");
@@ -2157,10 +3068,11 @@
         listEl.querySelectorAll("[data-otask]").forEach((cb) => {
           cb.onchange = () => {
             const tid = cb.getAttribute("data-otask");
-            db.tasks = (db.tasks || []).map((x) => (x.id === tid ? { ...x, done: cb.checked } : x));
-            saveSession();
-            saveState();
-            renderOwnerTasks(activeEmp);
+            const tk = db.tasks && db.tasks[tid];
+            if (tk) {
+              fbWriteTaskAtomic({ ...tk, done: cb.checked });
+              renderOwnerTasks(activeEmp);
+            }
           };
         });
 
@@ -2170,26 +3082,13 @@
             e.stopPropagation();
             const tid = btn.getAttribute("data-deltask");
             if (!tid) return;
-            db.tasks = (db.tasks || []).filter((x) => x && String(x.id) !== String(tid));
-            db.updatedAt = Date.now();
-            persistHomeLocalOnly(db);
+            fbRemoveTaskAtomic(tid);
             saveSession();
             renderOwnerTasks(activeEmp);
             toast("Tarea eliminada");
-            if (rtdb && !isApplyingRemote) {
-              const cleanCode = normalizeCode(db.homeCode);
-              rtdb.ref("homes/" + cleanCode).update({
-                tasks: JSON.parse(JSON.stringify(db.tasks)),
-                updatedAt: db.updatedAt
-              }).catch((err) => {
-                console.warn("Firebase task delete error:", err);
-              });
-            }
           };
         });
       }
-
-      let editingEmpId = null;
 
       function clearAndHideEditEmpCard() {
         editingEmpId = null;
@@ -2231,10 +3130,81 @@
         }
       }
 
+      // Modal de confirmación con validación estricta de contraseña de administrador antes de eliminar empleada
+      function openDeleteEmployeeStrictModal(empId) {
+        const emp = empId && db.employees && db.employees[empId];
+        if (!emp) return;
+
+        const bg = document.getElementById("modalBg");
+        const box = document.getElementById("modalBox");
+        box.innerHTML = `
+          <h3 style="margin:0 0 8px;">Confirmar eliminación de empleada</h3>
+          <p style="margin:0 0 8px; font-size:14px;">Se eliminará a <strong>${escapeHtml(emp.name)}</strong> y todos sus registros asociados.</p>
+          <div class="stack" style="margin-top:10px;">
+            <label class="field-lbl">
+              Contraseña de administrador (${escapeHtml(sess.ownerName || "Propietario")})
+              <input type="password" id="mStrictAdminPassInput" placeholder="Introduce tu contraseña de administrador" autocomplete="off" />
+            </label>
+            <div class="row-wrap" style="justify-content:flex-end; gap:8px; margin-top:6px;">
+              <button type="button" class="btn-soft btn-sm" id="mDelEmpCancel">Cancelar</button>
+              <button type="button" class="btn-red btn-sm" id="mDelEmpConfirm">Validar y eliminar</button>
+            </div>
+          </div>
+        `;
+        bg.classList.remove("hidden");
+
+        const passInput = document.getElementById("mStrictAdminPassInput");
+        if (passInput) passInput.focus();
+
+        const closeModal = () => bg.classList.add("hidden");
+        document.getElementById("mDelEmpCancel").onclick = closeModal;
+
+        const attemptDelete = () => {
+          const enteredPass = passInput ? passInput.value : "";
+          if (!String(enteredPass || "").trim()) {
+            toast("Debes introducir la contraseña de administrador");
+            if (passInput) passInput.focus();
+            return;
+          }
+          if (!isStrictAdminPasswordValid(enteredPass)) {
+            toast("Contraseña de administrador incorrecta. No se ha eliminado nada.");
+            if (passInput) {
+              passInput.value = "";
+              passInput.focus();
+            }
+            return;
+          }
+
+          const deletedName = emp.name;
+          closeModal();
+          if (editingEmpId === empId) {
+            clearAndHideEditEmpCard();
+          }
+          fbRemoveEmployeeAtomic(empId);
+          if (sess.selectedEmpId === empId) {
+            const remaining = Object.keys(db.employees || {});
+            sess.selectedEmpId = remaining.length ? remaining[0] : null;
+          }
+          saveSession();
+          renderOwnerScreen();
+          toast(`${deletedName} eliminada.`);
+        };
+
+        document.getElementById("mDelEmpConfirm").onclick = attemptDelete;
+        if (passInput) {
+          passInput.onkeydown = (ev) => {
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              attemptDelete();
+            }
+          };
+        }
+      }
+
       function renderOwnerEmployeesManager() {
         const listEl = document.getElementById("ownerEmpList");
         const editSel = document.getElementById("editEmpSelect");
-        const emps = Object.values(db.employees);
+        const emps = Object.values(db.employees || {});
 
         if (editSel) {
           editSel.innerHTML = emps.map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join("");
@@ -2262,8 +3232,8 @@
             </div>
             <div class="muted">Clave: <code>${escapeHtml(e.pass)}</code></div>
             <div class="row-wrap">
-              <button type="button" class="btn-soft btn-sm" data-editemp="${e.id}">Modificar</button>
-              <button type="button" class="btn-red btn-sm" data-delemp="${e.id}">Eliminar</button>
+              <button type="button" class="btn-soft btn-sm" data-editemp="${escapeHtml(e.id)}">Modificar</button>
+              <button type="button" class="btn-red btn-sm" data-delemp="${escapeHtml(e.id)}">Eliminar</button>
             </div>
           </div>
         `).join("");
@@ -2289,45 +3259,25 @@
             e.stopPropagation();
             const id = btn.getAttribute("data-delemp");
             if (!id || !db.employees[id]) return;
-            const deletedName = db.employees[id].name;
-            const nextEmps = { ...db.employees };
-            delete nextEmps[id];
-            const nextChats = { ...(db.chats || {}) };
-            delete nextChats[id];
-
-            db.employees = nextEmps;
-            db.chats = nextChats;
-            db.shifts = (db.shifts || []).filter((s) => s.employeeId !== id);
-            db.tasks = (db.tasks || []).filter((t) => t.employeeId !== id);
-            db.updatedAt = Date.now();
-
-            if (editingEmpId === id) {
-              clearAndHideEditEmpCard();
-            }
-            if (sess.selectedEmpId === id) {
-              const remaining = Object.keys(db.employees);
-              sess.selectedEmpId = remaining.length ? remaining[0] : null;
-            }
-
-            persistHomeLocalOnly(db);
-            saveSession();
-            renderOwnerScreen();
-            toast(`${deletedName} eliminada.`);
-
-            if (rtdb && !isApplyingRemote) {
-              const cleanCode = normalizeCode(db.homeCode);
-              rtdb.ref("homes/" + cleanCode + "/employees/" + id).remove().catch(() => {});
-              rtdb.ref("homes/" + cleanCode + "/chats/" + id).remove().catch(() => {});
-              rtdb.ref("homes/" + cleanCode).update({
-                employees: JSON.parse(JSON.stringify(db.employees)),
-                chats: JSON.parse(JSON.stringify(db.chats)),
-                shifts: JSON.parse(JSON.stringify(db.shifts)),
-                tasks: JSON.parse(JSON.stringify(db.tasks)),
-                updatedAt: db.updatedAt
-              }).catch(() => {});
-            }
+            openDeleteEmployeeStrictModal(id);
           };
         });
+      }
+
+      function isMonthClosed(empId, ym) {
+        if (!empId || !ym) return false;
+        return Boolean(db.closures && db.closures[`${empId}_${ym}`]);
+      }
+
+      function applyClosedBadgeToTitle(titleId, monthCursor, empId) {
+        const titleEl = document.getElementById(titleId);
+        if (!titleEl || !monthCursor) return;
+        const ym = `${monthCursor.getFullYear()}-${pad2(monthCursor.getMonth() + 1)}`;
+        const baseMonthTxt = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+        const closed = isMonthClosed(empId, ym);
+        titleEl.innerHTML = closed
+          ? `${escapeHtml(baseMonthTxt)} <span class="badge b-confirmed" style="margin-left:6px; vertical-align:middle;">Cerrado</span>`
+          : escapeHtml(baseMonthTxt);
       }
 
       function renderCalendarGridAndKpis(empId, monthCursor, titleId, kpisId, gridId, selectedISO, onStatsReady) {
@@ -2340,7 +3290,7 @@
 
         applyClosedBadgeToTitle(titleId, monthCursor, empId);
 
-        const mShifts = db.shifts.filter((s) => s.employeeId === empId && (s.dateISO || "").startsWith(ym));
+        const mShifts = getAllShiftsList().filter((s) => s.employeeId === empId && (s.dateISO || "").startsWith(ym));
         const confMins = mShifts.filter((s) => s.status === "confirmed").reduce((a, s) => a + shiftMinutes(s), 0);
         const pendMins = mShifts.filter((s) => s.status === "pending").reduce((a, s) => a + shiftMinutes(s), 0);
         const confDays = new Set(mShifts.filter((s) => s.status === "confirmed").map((s) => s.dateISO)).size;
@@ -2412,7 +3362,8 @@
           el.innerHTML = `<div class="muted" style="margin:auto;">Selecciona una empleada.</div>`;
           return;
         }
-        const msgs = (db.chats && Array.isArray(db.chats[empId])) ? db.chats[empId] : [];
+        const rawBucket = db.chats ? db.chats[empId] : null;
+        const msgs = mapValuesSorted(rawBucket, (a, b) => Number(a.ts || 0) - Number(b.ts || 0));
         if (!msgs.length) {
           el.innerHTML = `<div class="muted" style="margin:auto;">Sin mensajes todavía.</div>`;
           return;
@@ -2440,7 +3391,7 @@
       }
 
       function openAdjustShiftModal(shiftId) {
-        const sh = (db.shifts || []).find((x) => x && x.id === shiftId);
+        const sh = db.shifts && db.shifts[shiftId];
         if (!sh) return;
         const startD = new Date(Number(sh.startTs) || Date.now());
         const endD = new Date(Number(sh.endTs) || Date.now());
@@ -2500,270 +3451,35 @@
           if (newEndTs < newStartTs) newEndTs += 86400000;
           const nextStatus = document.getElementById("mShiftStatus").value || "pending";
 
-          db.shifts = (db.shifts || []).map((x) => {
-            if (!x || x.id !== sh.id) return x;
-            return {
-              ...x,
-              dateISO: iso,
-              startTs: newStartTs,
-              endTs: nextStatus === "active" && !x.endTs ? null : newEndTs,
-              status: nextStatus
-            };
-          });
+          const updatedShift = {
+            ...sh,
+            dateISO: iso,
+            startTs: newStartTs,
+            endTs: nextStatus === "active" && !sh.endTs ? null : newEndTs,
+            status: nextStatus
+          };
+          fbWriteShiftAtomic(updatedShift);
+
           const adjBy = sess.ownerName || "Propietario";
-          const durTxt = formatHM(shiftMinutes({ ...sh, startTs: newStartTs, endTs: newEndTs, status: nextStatus }));
+          const durTxt = formatHM(shiftMinutes(updatedShift));
           const statusLabel = nextStatus === "confirmed" ? "Confirmado" : (nextStatus === "active" ? "En curso" : "Pendiente");
-          broadcastEventToOwnersAndEmployee(
-            sh.employeeId,
-            `Turno ajustado (${formatDMY(iso)}) · Entrada ${formatHHMM(newStartTs)} – Salida ${formatHHMM(newEndTs)} (${durTxt}) · Estado: ${statusLabel} por ${adjBy}`,
-            { soundAlert: true }
-          );
-          db.updatedAt = Date.now();
+          const msg = createChatMessageObject(sh.employeeId, {
+            sender: "owner",
+            name: adjBy,
+            text: `Turno ajustado (${formatDMY(iso)}) · Entrada ${formatHHMM(newStartTs)} – Salida ${formatHHMM(newEndTs)} (${durTxt}) · Estado: ${statusLabel} por ${adjBy}`,
+            alertTarget: "all_except_sender",
+            actorRole: "owner",
+            actorName: adjBy
+          });
+          fbWriteChatMsgAtomic(sh.employeeId, msg);
+
           sess.shiftSelectedDateISO = iso;
-          const dtObj = new Date(y, m - 1, 1);
-          ownCalDate = dtObj;
+          ownCalDate = new Date(y, m - 1, 1);
 
           bg.classList.add("hidden");
           refreshNow();
-          pushStateToFirebase();
           toast("Turno actualizado.");
         };
-      }
-
-      let isSavingTask = false;
-
-      function openDatePicker(inputEl) {
-        if (!inputEl) return;
-        try {
-          inputEl.focus({ preventScroll: true });
-        } catch (_) {
-          try { inputEl.focus(); } catch (_) {}
-        }
-        if (typeof inputEl.showPicker === "function") {
-          try {
-            inputEl.showPicker();
-            return;
-          } catch (_) {}
-        }
-        try {
-          inputEl.click();
-        } catch (_) {}
-      }
-
-      function syncTaskDateControls(isoDate) {
-        const cleanISO = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || "")) ? isoDate : todayISO();
-        const dateInp = document.getElementById("specialTaskDateInput");
-        const dateDisp = document.getElementById("specialTaskDateDisplay");
-        if (dateInp && dateInp.value !== cleanISO) {
-          dateInp.value = cleanISO;
-        }
-        if (dateDisp) {
-          dateDisp.textContent = formatDMY(cleanISO);
-        }
-      }
-
-      function appendInstantChatMessage(empId, senderRole, senderName, text) {
-        if (!empId || !text) return;
-        const now = Date.now();
-        if (!db.chats) db.chats = {};
-        if (!Array.isArray(db.chats[empId])) db.chats[empId] = [];
-        db.chats[empId] = [
-          ...db.chats[empId],
-          {
-            id: "m_" + now + "_" + Math.random().toString(36).slice(2, 5),
-            sender: senderRole,
-            name: senderName,
-            text,
-            ts: now
-          }
-        ];
-      }
-
-      function isMonthClosed(empId, ym) {
-        if (!empId || !ym) return false;
-        return Boolean((db.closures && db.closures[`${empId}_${ym}`]));
-      }
-
-      function applyClosedBadgeToTitle(titleId, monthCursor, empId) {
-        const titleEl = document.getElementById(titleId);
-        if (!titleEl || !monthCursor) return;
-        const ym = `${monthCursor.getFullYear()}-${pad2(monthCursor.getMonth() + 1)}`;
-        const baseMonthTxt = monthCursor.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
-        const closed = isMonthClosed(empId, ym);
-        titleEl.innerHTML = closed
-          ? `${escapeHtml(baseMonthTxt)} <span class="badge b-confirmed" style="margin-left:6px; vertical-align:middle;">Cerrado</span>`
-          : escapeHtml(baseMonthTxt);
-      }
-
-
-      
-      // --- Tonos y alertas sonoras inmediatas (Web Audio API sin dependencias externas) ---
-      let audioCtxRef = null;
-      function getAudioContext() {
-        try {
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          if (!Ctx) return null;
-          if (!audioCtxRef) {
-            audioCtxRef = new Ctx();
-          }
-          if (audioCtxRef.state === "suspended") {
-            audioCtxRef.resume().catch(() => {});
-          }
-          return audioCtxRef;
-        } catch (_) {
-          return null;
-        }
-      }
-
-      function playToneSequence(freqs, stepMs = 95, type = "sine", gainPeak = 0.16) {
-        const ctx = getAudioContext();
-        if (!ctx) return;
-        try {
-          const now = ctx.currentTime;
-          freqs.forEach((freq, idx) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, now + (idx * stepMs) / 1000);
-            const startT = now + (idx * stepMs) / 1000;
-            const durT = (stepMs * 0.85) / 1000;
-            gain.gain.setValueAtTime(0.0001, startT);
-            gain.gain.exponentialRampToValueAtTime(gainPeak, startT + 0.015);
-            gain.gain.exponentialRampToValueAtTime(0.0001, startT + durT);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(startT);
-            osc.stop(startT + durT + 0.02);
-          });
-        } catch (_) {}
-      }
-
-      function playPunchInSound() {
-        playToneSequence([587.33, 880], 90, "triangle", 0.18);
-      }
-
-      function playPunchOutSound() {
-        playToneSequence([783.99, 523.25], 105, "triangle", 0.18);
-      }
-
-      function playChatAlertSound() {
-        playToneSequence([659.25, 987.77, 1318.51], 80, "sine", 0.15);
-      }
-
-      function getAllOwnerNames() {
-        const names = new Set();
-        (userProfiles || []).forEach((u) => {
-          if (u && u.role === "owner" && String(u.name || "").trim()) {
-            names.add(String(u.name).trim());
-          }
-        });
-        if (sess && String(sess.ownerName || "").trim()) {
-          names.add(String(sess.ownerName).trim());
-        }
-        if (!names.size) {
-          names.add("Propietario");
-        }
-        return Array.from(names);
-      }
-
-      function broadcastEventToOwnersAndEmployee(empId, text, options = {}) {
-        if (!empId || !text) return;
-        const now = Date.now();
-        if (!db.chats) db.chats = {};
-        if (!Array.isArray(db.chats[empId])) db.chats[empId] = [];
-
-        const owners = getAllOwnerNames();
-        owners.forEach((ownNm, idx) => {
-          db.chats[empId].push({
-            id: "m_own_" + now + "_" + idx + "_" + Math.random().toString(36).slice(2, 5),
-            sender: "owner",
-            name: ownNm,
-            text: `[Aviso a propietarios: ${ownNm}] ${text}`,
-            ts: now
-          });
-        });
-
-        db.chats[empId].push({
-          id: "m_emp_" + now + "_" + Math.random().toString(36).slice(2, 5),
-          sender: "sys",
-          name: "Alerta",
-          text: text,
-          soundAlert: Boolean(options.soundAlert !== false),
-          ts: now
-        });
-
-        if (options.soundAlert !== false) {
-          playChatAlertSound();
-        }
-      }
-
-      // --- Aislamiento multi-casa con ID único aleatorio en Firebase + Alias visible ---
-      const HOME_ALIAS_MAP_KEY = "hc_home_alias_map_v1";
-      let homeAliasMap = {};
-      try {
-        homeAliasMap = JSON.parse(localStorage.getItem(HOME_ALIAS_MAP_KEY) || "{}") || {};
-      } catch (_) {
-        homeAliasMap = {};
-      }
-
-      function saveHomeAliasMap() {
-        try {
-          localStorage.setItem(HOME_ALIAS_MAP_KEY, JSON.stringify(homeAliasMap));
-        } catch (_) {}
-      }
-
-      function generateUniqueFirebaseHomeId(alias = "") {
-        const prefix = String(alias || "HOME").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "HOME";
-        let fbKey = "";
-        try {
-          if (rtdb) {
-            fbKey = rtdb.ref("homes").push().key || "";
-          }
-        } catch (_) {}
-        const randPart = Array.from({ length: 18 }, () =>
-          "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"[Math.floor(Math.random() * 60)]
-        ).join("");
-        const tsPart = Date.now().toString(36);
-        return `${prefix}__${fbKey || randPart}_${tsPart}_${randPart.slice(0, 10)}`;
-      }
-
-      function isUniqueHomeId(val) {
-        return typeof val === "string" && val.includes("__") && val.length >= 16;
-      }
-
-      function getDisplayHomeName(stateObj = db) {
-        if (stateObj && String(stateObj.homeAlias || "").trim()) {
-          return String(stateObj.homeAlias).trim().toUpperCase();
-        }
-        const code = String((stateObj && stateObj.homeCode) || activeHomeCode || "MARTIN").trim();
-        if (code.includes("__")) {
-          return code.split("__")[0].toUpperCase() || "HOGAR";
-        }
-        return code.toUpperCase() || "MARTIN";
-      }
-
-      function resolveTargetHomeId(inputVal, createIfMissingAlias = false) {
-        const raw = String(inputVal || "").trim();
-        if (!raw) {
-          return db.homeCode || activeHomeCode || "MARTIN";
-        }
-        if (isUniqueHomeId(raw)) {
-          return raw;
-        }
-        const upperAlias = raw.toUpperCase();
-        if (upperAlias === "MARTIN" && !homeAliasMap["MARTIN"]) {
-          return "MARTIN";
-        }
-        if (homeAliasMap[upperAlias]) {
-          return homeAliasMap[upperAlias];
-        }
-        if (createIfMissingAlias) {
-          const newId = generateUniqueFirebaseHomeId(upperAlias);
-          homeAliasMap[upperAlias] = newId;
-          saveHomeAliasMap();
-          return newId;
-        }
-        return upperAlias;
       }
 
       function openNewEmployeeModal() {
@@ -2812,316 +3528,16 @@
           const dailyHours = Number(document.getElementById("mNewEmpHours").value) || 4;
           const id = "emp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5);
 
-          db.employees = {
-            ...(db.employees || {}),
-            [id]: { id, name, pass, rate, dailyHours }
-          };
+          const newEmp = { id, name, pass, rate, dailyHours };
           if (!db.chats) db.chats = {};
-          if (!db.chats[id]) db.chats[id] = [];
-          db.updatedAt = Date.now();
+          if (!db.chats[id]) db.chats[id] = {};
+          fbWriteEmployeeAtomic(newEmp);
           sess.selectedEmpId = id;
 
           bg.classList.add("hidden");
           refreshNow();
-          pushStateToFirebase();
           playToneSequence([660, 880], 70, "sine", 0.14);
           toast(`${name} añadida a empleadas registradas`);
-        };
-      }
-
-      function escapeHtml(str) {
-        return String(str || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;");
-      }
-
-      const FIREBASE_CONFIG = {
-        apiKey: "AIzaSyDYZFEZOYVwZmRnP9GYlYHz-vuEceD3O84",
-        authDomain: "homecontrol-casa.firebaseapp.com",
-        databaseURL: "https://homecontrol-casa-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "homecontrol-casa",
-        storageBucket: "homecontrol-casa.firebasestorage.app",
-        messagingSenderId: "959693944882",
-        appId: "1:959693944882:web:775071a8e58966e6dda42b",
-        measurementId: "G-1CKQ3HCX9W"
-      };
-
-      let rtdb = null;
-      let fbSubscribedCode = null;
-      let fbRef = null;
-      let isApplyingRemote = false;
-
-      function initFirebaseCompat() {
-        try {
-          if (window.firebase && firebase.apps && !firebase.apps.length) {
-            firebase.initializeApp(FIREBASE_CONFIG);
-          }
-          if (window.firebase && firebase.database) {
-            rtdb = firebase.database();
-          }
-        } catch (err) {
-          console.warn("Firebase init warning:", err);
-        }
-      }
-
-      function toCleanArray(val) {
-        if (!val) return [];
-        const arr = Array.isArray(val) ? val : Object.values(val);
-        return arr.filter((item) => item !== null && item !== undefined && typeof item === "object");
-      }
-
-      function normalizeRemoteHome(raw, fallbackCode) {
-        const base = getDefaultState();
-        const code = String((raw && raw.homeCode) || fallbackCode || base.homeCode || "MARTIN").trim().toUpperCase();
-        if (!raw || typeof raw !== "object") {
-          base.homeCode = code;
-          return base;
-        }
-
-        const rawEmps = raw.employees && typeof raw.employees === "object" ? raw.employees : {};
-        const mergedEmps = {};
-        Object.keys(rawEmps).forEach((eid) => {
-          const e = rawEmps[eid];
-          if (e && typeof e === "object") {
-            mergedEmps[eid] = {
-              id: e.id || eid,
-              name: String(e.name || eid),
-              pass: e.pass !== undefined && e.pass !== null ? String(e.pass) : String(e.name || eid),
-              rate: Number(e.rate) || 10,
-              dailyHours: Number(e.dailyHours) || 4
-            };
-          }
-        });
-
-        const mergedChats = {};
-        const rawChats = raw.chats && typeof raw.chats === "object" ? raw.chats : {};
-        const allChatEmpIds = new Set([...Object.keys(mergedEmps), ...Object.keys(rawChats)]);
-        allChatEmpIds.forEach((eid) => {
-          mergedChats[eid] = toCleanArray(rawChats[eid]);
-        });
-
-        const cleanShifts = toCleanArray(raw.shifts).filter((s) => s.employeeId && s.startTs);
-        const cleanTasks = toCleanArray(raw.tasks).filter((t) => t.employeeId && t.title);
-
-        const cleanClosures = {};
-        if (raw.closures && typeof raw.closures === "object") {
-          Object.keys(raw.closures).forEach((k) => {
-            if (raw.closures[k] && typeof raw.closures[k] === "object") {
-              cleanClosures[k] = raw.closures[k];
-            }
-          });
-        }
-
-        const finalEmps = raw.employees === undefined ? base.employees : mergedEmps;
-        return {
-          homeCode: code,
-          masterPass: raw.masterPass ? String(raw.masterPass) : base.masterPass,
-          updatedAt: Number(raw.updatedAt || 0),
-          employees: finalEmps,
-          shifts: cleanShifts,
-          tasks: cleanTasks,
-          chats: mergedChats,
-          closures: cleanClosures
-        };
-      }
-
-      function subscribeHome(code, onInitialLoaded) {
-        const cleanCode = String(code || db.homeCode || "MARTIN").trim().toUpperCase();
-        db.homeCode = cleanCode;
-        saveState();
-
-        if (!rtdb) {
-          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
-          return;
-        }
-
-        if (fbRef && fbSubscribedCode === cleanCode) {
-          if (typeof onInitialLoaded === "function") onInitialLoaded(db);
-          return;
-        }
-
-        if (fbRef) {
-          try { fbRef.off(); } catch (_) {}
-          fbRef = null;
-        }
-
-        fbSubscribedCode = cleanCode;
-        fbRef = rtdb.ref("homes/" + cleanCode);
-
-        let initialDone = false;
-
-        fbRef.on("value", (snap) => {
-          const val = snap.val();
-          isApplyingRemote = true;
-          try {
-            if (val) {
-              const remoteState = normalizeRemoteHome(val, cleanCode);
-              const localState = loadHomeState(cleanCode);
-              const memState = (db && normalizeCode(db.homeCode) === cleanCode) ? db : null;
-              const bestLocal = (memState && Number(memState.updatedAt || 0) >= Number(localState.updatedAt || 0))
-                ? memState
-                : localState;
-              const remoteTs = Number(remoteState.updatedAt || 0);
-              const localTs = Number((bestLocal && bestLocal.updatedAt) || 0);
-              if (localTs > remoteTs && normalizeCode(db.homeCode) === cleanCode) {
-                db = bestLocal;
-                persistHomeLocalOnly(db);
-              } else {
-                const mergedChatsById = { ...(remoteState.chats || {}) };
-                const mergedTasksById = Array.isArray(remoteState.tasks) ? [...remoteState.tasks] : [];
-                if (bestLocal && normalizeCode(db.homeCode) === cleanCode) {
-                  if (bestLocal.chats) {
-                    Object.keys(bestLocal.chats).forEach((eid) => {
-                      const remArr = Array.isArray(mergedChatsById[eid]) ? mergedChatsById[eid] : [];
-                      const locArr = Array.isArray(bestLocal.chats[eid]) ? bestLocal.chats[eid] : [];
-                      const seenIds = new Set(remArr.map((x) => x && x.id).filter(Boolean));
-                      const extras = locArr.filter((x) => x && x.id && !seenIds.has(x.id));
-                      if (extras.length) {
-                        mergedChatsById[eid] = [...remArr, ...extras].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
-                      }
-                    });
-                  }
-                  if (Array.isArray(bestLocal.tasks)) {
-                    const seenTaskIds = new Set(mergedTasksById.map((t) => t && t.id).filter(Boolean));
-                    bestLocal.tasks.forEach((t) => {
-                      if (t && t.id && !seenTaskIds.has(t.id) && Number(t.createdAt || db.updatedAt || 0) >= remoteTs) {
-                        mergedTasksById.push(t);
-                        seenTaskIds.add(t.id);
-                      }
-                    });
-                  }
-                }
-                db = { ...remoteState, chats: mergedChatsById, tasks: mergedTasksById };
-                persistHomeLocalOnly(db);
-              }
-            } else {
-              const localState = loadHomeState(cleanCode);
-              db = normalizeRemoteHome(localState, cleanCode);
-              persistHomeLocalOnly(db);
-              fbRef.set(JSON.parse(JSON.stringify(db))).catch(() => {});
-            }
-            if (sess.loggedIn && normalizeCode(db.homeCode) === cleanCode) {
-              renderApp();
-            }
-          } finally {
-            isApplyingRemote = false;
-          }
-
-          if (!initialDone) {
-            initialDone = true;
-            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
-          }
-        }, (err) => {
-          console.warn("Firebase listener error:", err);
-          if (!initialDone) {
-            initialDone = true;
-            if (typeof onInitialLoaded === "function") onInitialLoaded(db);
-          }
-        });
-      }
-
-      function pushStateToFirebase() {
-        if (!rtdb || isApplyingRemote) return;
-        const cleanCode = String(db.homeCode || "MARTIN").trim().toUpperCase();
-        db.homeCode = cleanCode;
-        try {
-          localStorage.setItem(homeStorageKey(cleanCode), JSON.stringify(db));
-        } catch (_) {}
-        if (!fbRef || fbSubscribedCode !== cleanCode) {
-          subscribeHome(cleanCode);
-        }
-        try {
-          const payload = JSON.parse(JSON.stringify(db));
-          rtdb.ref("homes/" + cleanCode).set(payload).catch((err) => {
-            console.warn("Firebase set error:", err);
-          });
-        } catch (err) {
-          console.warn("Firebase set error:", err);
-        }
-      }
-
-      function openCreateHomeModal() {
-        const currentCode = (document.getElementById("homeCodeInput").value || "").trim().toUpperCase();
-        const bg = document.getElementById("modalBg");
-        const box = document.getElementById("modalBox");
-
-        box.innerHTML = `
-          <h3 style="margin:0 0 8px;">Crear nuevo hogar en Firebase</h3>
-          <p class="muted" style="margin:0 0 12px;">Se creará la estructura del hogar y su contraseña máster en Realtime Database.</p>
-          <div class="stack">
-            <label class="field-lbl">
-              Código de hogar (mayúsculas, sin espacios)
-              <input type="text" id="mNewHomeCode" value="${escapeHtml(currentCode)}" placeholder="Ej: BARAJAS" autocomplete="off" />
-            </label>
-            <label class="field-lbl">
-              Contraseña máster del hogar
-              <input type="text" id="mNewHomePass" value="1234" placeholder="Contraseña máster" />
-            </label>
-            <label class="field-lbl">
-              Nombre propietario inicial (opcional)
-              <input type="text" id="mNewOwnerName" value="${escapeHtml(ownerProfiles[0] || "Fran")}" placeholder="Ej: Fran" />
-            </label>
-            <div class="row-wrap" style="justify-content:flex-end; gap:8px; margin-top:6px;">
-              <button type="button" class="btn-soft btn-sm" id="mCreateHomeCancel">Cancelar</button>
-              <button type="button" class="btn-blue btn-sm" id="mCreateHomeConfirm">Crear en Firebase</button>
-            </div>
-          </div>
-        `; 
-              bg.classList.remove("hidden");
-
-        document.getElementById("mCreateHomeCancel").onclick = () => bg.classList.add("hidden");
-
-        document.getElementById("mCreateHomeConfirm").onclick = () => {
-          const rawCode = document.getElementById("mNewHomeCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-          const newPass = document.getElementById("mNewHomePass").value.trim() || "1234";
-          const ownerNm = document.getElementById("mNewOwnerName").value.trim() || "Fran";
-
-          if (!rawCode) {
-            toast("Escribe un código de hogar válido");
-            return;
-          }
-
-          const freshHome = getDefaultState();
-          freshHome.homeCode = rawCode;
-          freshHome.masterPass = newPass;
-          freshHome.shifts = [];
-          freshHome.tasks = [];
-          freshHome.closures = {};
-
-          db = freshHome;
-          document.getElementById("homeCodeInput").value = rawCode;
-          document.getElementById("ownerNameInput").value = ownerNm;
-          document.getElementById("ownerPassInput").value = newPass;
-          rememberOwnerProfile(ownerNm);
-
-          try {
-            localStorage.setItem(homeStorageKey(rawCode), JSON.stringify(db));
-          } catch (_) {}
-
-          if (rtdb) {
-            if (fbRef) {
-              try { fbRef.off(); } catch (_) {}
-              fbRef = null;
-            }
-            fbSubscribedCode = rawCode;
-            fbRef = rtdb.ref("homes/" + rawCode);
-            fbRef.set(JSON.parse(JSON.stringify(freshHome))).then(() => {
-              subscribeHome(rawCode, () => {
-                renderLogin();
-                toast(`Hogar ${rawCode} creado en Firebase`);
-              });
-            }).catch((err) => {
-              console.warn("Create home error:", err);
-              toast("No se pudo escribir en Firebase. Revisa Reglas.");
-            });
-          } else {
-            renderLogin();
-            toast(`Hogar ${rawCode} creado en local (sin conexión Firebase)`);
-          }
-
-          bg.classList.add("hidden");
         };
       }
 
@@ -3139,11 +3555,16 @@
         const homeCodeInp = document.getElementById("homeCodeInput");
         if (homeCodeInp) {
           homeCodeInp.onchange = () => {
-            const code = homeCodeInp.value.trim().toUpperCase();
-            if (!code) return;
-            db.homeCode = code;
-          db.homeAlias = aliasName;
-            try { localStorage.setItem(homeStorageKey(code), JSON.stringify(db)); } catch (_) {}
+            const rawVal = homeCodeInp.value.trim();
+            if (!rawVal) return;
+            const upperAlias = rawVal.toUpperCase();
+            const resolved = resolveTargetHomeId(rawVal, false);
+            activeHomeCode = resolved;
+            db = loadHomeState(resolved);
+            db.homeCode = resolved;
+            db.homeAlias = upperAlias;
+            persistHomeLocalOnly(db);
+            subscribeHome(resolved, () => renderLogin());
           };
         }
 
@@ -3174,20 +3595,41 @@
         };
 
         document.getElementById("saveOwnerProfileBtn").onclick = () => {
-          const code = normalizeCode(document.getElementById("homeCodeInput").value || activeHomeCode);
+          const rawHome = (document.getElementById("homeCodeInput").value || activeHomeCode).trim();
+          const code = resolveTargetHomeId(rawHome, false);
           const name = document.getElementById("ownerNameInput").value.trim();
           const pass = document.getElementById("ownerPassInput").value.trim();
           if (!name) {
             toast("Escribe tu nombre para crear o actualizar el perfil");
             return;
           }
-          upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass || "1234" });
+          if (!pass) {
+            toast("Introduce una contraseña para guardar el perfil");
+            document.getElementById("ownerPassInput").focus();
+            return;
+          }
+          upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass });
           document.getElementById("ownerPassInput").value = "";
           renderLogin();
           toast(`Perfil de ${name} guardado`);
         };
 
         document.getElementById("enterOwnerBtn").onclick = () => {
+          const name = document.getElementById("ownerNameInput").value.trim() || "Fran";
+          const pass = document.getElementById("ownerPassInput").value.trim();
+          if (!pass) {
+            toast("Debes introducir tu contraseña para entrar como propietario");
+            document.getElementById("ownerPassInput").focus();
+            return;
+          }
+
+          const existingProf = userProfiles.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "owner");
+          if (existingProf && !verifyProfilePassword(existingProf, pass)) {
+            toast("Contraseña incorrecta");
+            document.getElementById("ownerPassInput").focus();
+            return;
+          }
+
           const rawHomeInput = (document.getElementById("homeCodeInput").value || "").trim();
           const aliasName = rawHomeInput ? rawHomeInput.toUpperCase() : getDisplayHomeName(db);
           let code = resolveTargetHomeId(rawHomeInput || activeHomeCode, false);
@@ -3196,47 +3638,43 @@
             homeAliasMap[aliasName] = code;
             saveHomeAliasMap();
           }
-          const name = document.getElementById("ownerNameInput").value.trim() || (userProfiles.find((u) => u.role === "owner") || {}).name || "Fran";
-          const pass = document.getElementById("ownerPassInput").value.trim();
-
-          const existingProf = userProfiles.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "owner");
-          if (existingProf && pass && !verifyProfilePassword(existingProf, pass)) {
-            toast("Contraseña de perfil incorrecta");
-            return;
-          }
 
           activeHomeCode = code;
           db = loadHomeState(code);
           db.homeCode = code;
+          db.homeAlias = aliasName;
+
           if (!existingProf) {
-            upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass || "1234" });
+            upsertUserProfile({ name, role: "owner", homeCode: code, rawPass: pass });
           } else {
             existingProf.homeCode = code;
-            if (pass) existingProf.passHash = hashPass(pass);
+            existingProf.passHash = hashPass(pass);
             saveUserProfiles();
           }
 
           sess.loggedIn = true;
           sess.role = "owner";
           sess.ownerName = name;
-          sess.selectedEmpId = Object.keys(db.employees)[0] || null;
+          sess.selectedEmpId = Object.keys(db.employees || {})[0] || null;
           sess.ownerTopOverlay = null;
           sess.ownerBottomTab = "shifts";
           sess.shiftSelectedDateISO = todayISO();
           document.getElementById("ownerPassInput").value = "";
+          registerAlertBaseline(db.chats);
           refreshNow();
           subscribeHome(code);
         };
 
         document.getElementById("enterEmpBtn").onclick = () => {
-          const code = normalizeCode(document.getElementById("homeCodeInput").value || activeHomeCode);
+          const rawHomeInput = (document.getElementById("homeCodeInput").value || activeHomeCode).trim();
+          const code = resolveTargetHomeId(rawHomeInput, false);
           activeHomeCode = code;
           db = loadHomeState(code);
           db.homeCode = code;
 
           const chosenEmpId = document.getElementById("empLoginSelect").value;
           const pass = document.getElementById("empPassInput").value.trim();
-          const emp = (chosenEmpId && db.employees[chosenEmpId]) || Object.values(db.employees)[0];
+          const emp = (chosenEmpId && db.employees[chosenEmpId]) || Object.values(db.employees || {})[0];
           if (!emp) {
             toast("No hay empleadas en este hogar");
             return;
@@ -3260,45 +3698,63 @@
           sess.employeeId = emp.id;
           sess.empTab = "fichar";
           document.getElementById("empPassInput").value = "";
+          registerAlertBaseline(db.chats);
           refreshNow();
           subscribeHome(code);
         };
 
         document.querySelectorAll("[data-emp-nav]").forEach((btn) => {
           btn.onclick = () => {
-            sess.empTab = btn.getAttribute("data-emp-nav");
+            const nextTab = btn.getAttribute("data-emp-nav");
+            sess.empTab = nextTab;
+            if (nextTab === "chat") {
+              stopChatAlert();
+            }
             saveSession();
             renderEmployeeScreen();
           };
         });
 
+        // ENTRADA: tono local breve + escritura atómica del shift activo + mensaje al chat para propietarios
         document.getElementById("btnPunchIn").onclick = () => {
           const empId = sess.employeeId;
           if (!empId || getActiveShift(empId)) return;
-          playPunchInSound();
+
+          playPunchInLocalTone();
+
           const emp = db.employees[empId];
           const empName = emp ? emp.name : "Empleada";
           const now = Date.now();
           const dISO = todayISO();
-          db.shifts = [{
-            id: "sh_" + now,
+          const shiftId = "sh_" + now + "_" + Math.random().toString(36).slice(2, 6);
+
+          const newShift = {
+            id: shiftId,
             employeeId: empId,
             dateISO: dISO,
             startTs: now,
             endTs: null,
-            status: "active"
-          }, ...(db.shifts || [])];
-          broadcastEventToOwnersAndEmployee(
-            empId,
-            `Entrada fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)}`,
-            { soundAlert: true }
-          );
-          db.updatedAt = now;
+            status: "active",
+            updatedAt: now
+          };
+
+          fbWriteShiftAtomic(newShift);
+
+          const msg = createChatMessageObject(empId, {
+            sender: "emp",
+            name: empName,
+            text: `Entrada fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)}`,
+            alertTarget: "owners",
+            actorRole: "emp",
+            actorName: empName
+          });
+          fbWriteChatMsgAtomic(empId, msg);
+
           refreshNow();
-          pushStateToFirebase();
           toast(`Entrada fichada (${formatHHMM(now)})`);
         };
 
+        // SALIDA: confirmación + escritura atómica del shift cerrado (pending) + mensaje al chat para propietarios
         function openConfirmPunchOutModal() {
           const empId = sess.employeeId;
           const active = getActiveShift(empId);
@@ -3325,25 +3781,41 @@
 
           document.getElementById("mOutConfirm").onclick = () => {
             bg.classList.add("hidden");
-            const sh = getActiveShift(sess.employeeId);
-            if (!sh) return;
-            playPunchOutSound();
-            const emp = db.employees[sess.employeeId];
+            const activeSh = getActiveShift(sess.employeeId);
+            if (!activeSh) return;
+
+            playPunchOutLocalTone();
+
+            const empId = sess.employeeId;
+            const emp = db.employees[empId];
             const empName = emp ? emp.name : "Empleada";
             const now = Date.now();
-            const dISO = sh.dateISO || todayISO();
-            sh.endTs = now;
-            sh.status = "pending";
-            broadcastEventToOwnersAndEmployee(
-              sess.employeeId,
-              `Salida fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)}`,
-              { soundAlert: true }
-            );
-            db.updatedAt = now;
+            const dISO = activeSh.dateISO || todayISO();
+
+            const closedShift = {
+              ...activeSh,
+              endTs: now,
+              status: "pending",
+              updatedAt: now
+            };
+
+            fbWriteShiftAtomic(closedShift);
+
+            const durLabel = formatHM(shiftMinutes(closedShift, now));
+            const msg = createChatMessageObject(empId, {
+              sender: "emp",
+              name: empName,
+              text: `Salida fichada por ${empName} el ${formatDMY(dISO)} a las ${formatHHMM(now)} (Duración: ${durLabel})`,
+              alertTarget: "owners",
+              actorRole: "emp",
+              actorName: empName
+            });
+            fbWriteChatMsgAtomic(empId, msg);
+
             refreshNow();
-            pushStateToFirebase();
-            if (isOvertimeThreshold(sh, now)) {
-              toast(`Salida fichada (${formatHHMM(now)}) · Aviso: supera margen de 1h 10m (${formatHM(shiftMinutes(sh, now))})`);
+
+            if (isOvertimeThreshold(closedShift, now)) {
+              toast(`Salida fichada (${formatHHMM(now)}) · Aviso: supera margen de 1h 10m (${durLabel})`);
             } else {
               toast(`Salida fichada (${formatHHMM(now)}) · Pendiente`);
             }
@@ -3361,16 +3833,25 @@
           renderEmployeeScreen();
         };
 
+        // Chat empleada -> suena a propietarios, no a sí misma
         document.getElementById("empChatForm").onsubmit = (e) => {
           e.preventDefault();
           const inp = document.getElementById("empChatInput");
           const txt = inp.value.trim();
           const emp = db.employees[sess.employeeId];
           if (!txt || !emp) return;
-          if (!db.chats[emp.id]) db.chats[emp.id] = [];
-          db.chats[emp.id].push({ id: "m_" + Date.now(), sender: "emp", name: emp.name, text: txt, ts: Date.now() });
+
+          const msg = createChatMessageObject(emp.id, {
+            sender: "emp",
+            name: emp.name,
+            text: txt,
+            alertTarget: "owners",
+            actorRole: "emp",
+            actorName: emp.name
+          });
+          fbWriteChatMsgAtomic(emp.id, msg);
+
           inp.value = "";
-          saveState();
           renderChat("empChatList", emp.id, "emp");
         };
 
@@ -3400,54 +3881,20 @@
           };
         }
 
-        document.getElementById("topBtnLink").onclick = () => {
-          const homeId = db.homeCode || activeHomeCode || generateUniqueFirebaseHomeId(getDisplayHomeName(db));
-          db.homeCode = homeId;
-          db.homeAlias = getDisplayHomeName(db);
-          persistHomeLocalOnly(db);
-          pushStateToFirebase();
-          const url = new URL(window.location.href);
-          url.searchParams.set("hogar", homeId);
-          url.searchParams.set("nombre", db.homeAlias);
-          const fullLink = url.toString();
-          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-            navigator.clipboard.writeText(fullLink).catch(() => {});
-          }
-          toast(`Enlace (${db.homeAlias}) copiado`);
-        };
-
         document.querySelectorAll("[data-own-nav]").forEach((btn) => {
           btn.onclick = () => {
+            const nextTab = btn.getAttribute("data-own-nav");
             sess.ownerTopOverlay = null;
-            sess.ownerBottomTab = btn.getAttribute("data-own-nav");
+            sess.ownerBottomTab = nextTab;
+            if (nextTab === "chat") {
+              stopChatAlert();
+            }
             saveSession();
             renderOwnerScreen();
           };
         });
 
-        document.getElementById("addEmpBtn").onclick = () => {
-          const name = document.getElementById("newEmpName").value.trim();
-          if (!name) {
-            toast("Escribe un nombre");
-            return;
-          }
-          const pass = document.getElementById("newEmpPass").value.trim() || name;
-          const rate = Number(document.getElementById("newEmpRate").value) || 10;
-          const dailyHours = Number(document.getElementById("newEmpHours").value) || 4;
-          const id = "emp_" + Date.now();
-
-          db.employees[id] = { id, name, pass, rate, dailyHours };
-          if (!db.chats[id]) db.chats[id] = [];
-          db.updatedAt = Date.now();
-          sess.selectedEmpId = id;
-
-          document.getElementById("newEmpName").value = "";
-          document.getElementById("newEmpPass").value = "";
-          refreshNow();
-          pushStateToFirebase();
-          toast(`${name} añadida`);
-        };
-
+        // Tareas: escritura atómica únicamente en tasks/{taskId}, sin tocar jamás shifts
         document.getElementById("taskEmpSelect").onchange = (e) => {
           sess.selectedEmpId = e.target.value || null;
           saveSession();
@@ -3496,9 +3943,7 @@
             e.preventDefault();
             e.stopPropagation();
           }
-          isSavingTask = false;
 
-          const assignBtn = document.getElementById("assignSpecialTaskBtn");
           const titleInp = document.getElementById("specialTaskInput");
           const empSel = document.getElementById("taskEmpSelect");
           const dateInp = document.getElementById("specialTaskDateInput");
@@ -3508,11 +3953,6 @@
           const iso = (dateInp && /^\d{4}-\d{2}-\d{2}$/.test(dateInp.value))
             ? dateInp.value
             : (sess.taskFilterISO || todayISO());
-
-          if (assignBtn) {
-            assignBtn.disabled = false;
-            assignBtn.textContent = "Asignar tarea";
-          }
 
           if (!empId || !db.employees[empId]) {
             toast("Selecciona una empleada");
@@ -3531,22 +3971,21 @@
             dateISO: iso,
             title,
             done: false,
-            createdAt: nowTs
+            createdAt: nowTs,
+            updatedAt: nowTs
           };
 
-          db.tasks = [...(Array.isArray(db.tasks) ? db.tasks : []), newTask];
-          db.updatedAt = nowTs;
+          fbWriteTaskAtomic(newTask);
+
           sess.selectedEmpId = empId;
           sess.taskFilterISO = iso;
 
           if (titleInp) titleInp.value = "";
           syncTaskDateControls(iso);
           if (empSel) empSel.value = empId;
-          persistHomeLocalOnly(db);
           saveSession();
           renderOwnerTasks(db.employees[empId]);
           toast("Tarea asignada");
-          pushStateToFirebase();
         };
 
         document.getElementById("ownShiftPrevMonthBtn").onclick = () => {
@@ -3607,38 +4046,19 @@
             const nextRate = Number(document.getElementById("editEmpRate").value);
             const nextHours = Number(document.getElementById("editEmpHours").value);
 
-            db.employees[targetId] = {
+            const updatedEmp = {
               ...db.employees[targetId],
               name: nextName,
               pass: nextPass,
               rate: isNaN(nextRate) ? db.employees[targetId].rate : nextRate,
               dailyHours: isNaN(nextHours) ? db.employees[targetId].dailyHours : nextHours
             };
-            db.updatedAt = Date.now();
+            fbWriteEmployeeAtomic(updatedEmp);
             sess.selectedEmpId = targetId;
             clearAndHideEditEmpCard();
             refreshNow();
-            pushStateToFirebase();
             toast(`${nextName} actualizada`);
           };
-        }
-
-        function formatMonthLabelYM(ym) {
-          const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
-          if (!m) return String(ym || "");
-          const dt = new Date(Number(m[1]), Number(m[2]) - 1, 1);
-          if (isNaN(dt.getTime())) return String(ym);
-          return dt.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-        }
-
-        function sanitizePaidDateDMY(rawDate, fallbackTs) {
-          const s = String(rawDate || "").trim();
-          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
-          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDMY(s);
-          const num = Number(s);
-          if (!isNaN(num) && num > 100000000) return formatDMY(num);
-          if (fallbackTs && !isNaN(Number(fallbackTs))) return formatDMY(Number(fallbackTs));
-          return formatDMY(todayISO());
         }
 
         const openPayHistoryBtnEl = document.getElementById("openPayHistoryBtn");
@@ -3692,7 +4112,10 @@
         if (reopenMonthPayBtnEl) {
           reopenMonthPayBtnEl.onclick = () => {
             const empId = sess.selectedEmpId;
-            if (!empId) return;
+            if (!empId) {
+              toast("Selecciona una empleada");
+              return;
+            }
             const ym = `${ownCalDate.getFullYear()}-${pad2(ownCalDate.getMonth() + 1)}`;
             const key = `${empId}_${ym}`;
             if (!db.closures || !db.closures[key]) {
@@ -3715,29 +4138,20 @@
             document.getElementById("mReopenCancel").onclick = () => bg.classList.add("hidden");
             document.getElementById("mReopenYes").onclick = () => {
               bg.classList.add("hidden");
-              const nextClosures = { ...(db.closures || {}) };
-              delete nextClosures[key];
-              db.closures = nextClosures;
-              db.updatedAt = Date.now();
-              persistHomeLocalOnly(db);
+              fbRemoveClosureAtomic(key);
               saveSession();
               renderOwnerScreen();
               toast(`Mes ${formatMonthLabelYM(ym)} reabierto`);
-              if (rtdb && !isApplyingRemote) {
-                const cleanCode = normalizeCode(db.homeCode);
-                rtdb.ref("homes/" + cleanCode + "/closures/" + key).remove().catch(() => {});
-                rtdb.ref("homes/" + cleanCode).update({
-                  closures: JSON.parse(JSON.stringify(db.closures)),
-                  updatedAt: db.updatedAt
-                }).catch(() => {});
-              }
             };
           };
         }
 
         document.getElementById("saveMonthPayBtn").onclick = () => {
           const empId = sess.selectedEmpId;
-          if (!empId) return;
+          if (!empId) {
+            toast("Selecciona una empleada");
+            return;
+          }
           const ym = `${ownCalDate.getFullYear()}-${pad2(ownCalDate.getMonth() + 1)}`;
           const amt = Number(document.getElementById("ownPayAmountInput").value) || 0;
           const paidDMY = document.getElementById("ownPayDateInput").value.trim() || formatDMY(todayISO());
@@ -3747,7 +4161,7 @@
           box.innerHTML = `
             <h3 style="margin:0 0 8px;">Confirmar cierre de mes</h3>
             <p style="margin:0 0 10px; font-size:15px;">¿Estás seguro de guardar?</p>
-            <div class="muted" style="margin-bottom:14px;">Mes: <strong>${ym}</strong> · Importe: <strong>${formatEur(amt)}</strong> · Fecha: <strong>${escapeHtml(paidDMY)}</strong></div>
+            <div class="muted" style="margin-bottom:14px;">Mes: <strong>${escapeHtml(formatMonthLabelYM(ym))}</strong> · Importe: <strong>${formatEur(amt)}</strong> · Fecha: <strong>${escapeHtml(paidDMY)}</strong></div>
             <div class="row-wrap" style="justify-content:flex-end; gap:10px;">
               <button type="button" class="btn-soft btn-sm" id="mCloseCancel">No</button>
               <button type="button" class="btn-green btn-sm" id="mCloseYes">Sí</button>
@@ -3762,39 +4176,45 @@
             const empObj = db.employees[empId];
             const empLabel = empObj ? empObj.name : "Empleada";
             const monthText = formatMonthLabelYM(ym);
-            db.closures = {
-              ...(db.closures || {}),
-              [`${empId}_${ym}`]: { amount: amt, paidDMY: cleanPaidDMY, closedAt: Date.now() }
-            };
-            appendInstantChatMessage(
-              empId,
-              "sys",
-              sess.ownerName || "Propietario",
-              `Mes cerrado y pagado (${monthText}) · Fecha: ${cleanPaidDMY} · ${formatEur(amt)} (${empLabel})`
-            );
-            db.updatedAt = Date.now();
+            const ownerActor = sess.ownerName || "Propietario";
+
+            fbWriteClosureAtomic(`${empId}_${ym}`, { amount: amt, paidDMY: cleanPaidDMY, closedAt: Date.now() });
+
+            const msg = createChatMessageObject(empId, {
+              sender: "owner",
+              name: ownerActor,
+              text: `Mes cerrado y pagado (${monthText}) · Fecha: ${cleanPaidDMY} · ${formatEur(amt)} (${empLabel})`,
+              alertTarget: "all_except_sender",
+              actorRole: "owner",
+              actorName: ownerActor
+            });
+            fbWriteChatMsgAtomic(empId, msg);
+
             refreshNow();
-            pushStateToFirebase();
             toast("Cierre de mes guardado en histórico");
           };
         };
 
+        // Chat propietario -> suena a demás propietarios y empleada, NO a sí mismo
         document.getElementById("ownerChatForm").onsubmit = (e) => {
           e.preventDefault();
           const empId = sess.selectedEmpId;
           const inp = document.getElementById("ownerChatInput");
           const txt = inp.value.trim();
           if (!txt || !empId) return;
-          if (!db.chats[empId]) db.chats[empId] = [];
-          db.chats[empId].push({
-            id: "m_" + Date.now(),
+
+          const actorName = sess.ownerName || "Propietario";
+          const msg = createChatMessageObject(empId, {
             sender: "owner",
-            name: sess.ownerName || "Propietario",
+            name: actorName,
             text: txt,
-            ts: Date.now()
+            alertTarget: "all_except_sender",
+            actorRole: "owner",
+            actorName: actorName
           });
+          fbWriteChatMsgAtomic(empId, msg);
+
           inp.value = "";
-          saveState();
           renderChat("ownerChatList", empId, "owner");
         };
 
@@ -3816,10 +4236,11 @@
         });
       }
 
+      unlockAudioOnFirstGesture();
       initFirebaseCompat();
       bindEvents();
       const urlHome = new URLSearchParams(window.location.search).get("hogar");
-      const startHome = (urlHome || db.homeCode || "MARTIN").trim().toUpperCase();
+      const startHome = resolveTargetHomeId(urlHome || db.homeCode || "MARTIN", false);
       sess.loggedIn = false;
       sess.role = null;
       renderLogin();

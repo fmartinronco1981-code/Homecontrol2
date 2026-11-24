@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>HomeControl</title>
   <style>
+    /* Tokens de diseño y paleta base adaptable */
     :root {
       --bg: #eef4fb;
       --bg-grad: linear-gradient(180deg, #e7f0fa 0%, #f5f8fc 55%, #eef4fb 100%);
@@ -94,6 +95,7 @@
       display: none !important;
     }
 
+    /* Contenedor principal fluido */
     .app-shell {
       width: 100%;
       max-width: 1280px;
@@ -158,6 +160,7 @@
       min-width: 0;
     }
 
+    /* Botones de acción */
     .btn-blue {
       background: var(--blue);
       color: #fff;
@@ -225,7 +228,7 @@
       pointer-events: none;
     }
 
-    /* Login / Acceso */
+    /* Pantalla de acceso */
     .login-header {
       display: flex;
       align-items: center;
@@ -331,7 +334,7 @@
       padding-top: 8px;
     }
 
-    /* Top bar en sesión */
+    /* Barra superior en sesión */
     .session-bar {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -391,7 +394,7 @@
       color: var(--red);
     }
 
-    /* Vista empleada: Fichar / Tareas */
+    /* Layouts responsivos */
     .emp-fichaje-layout {
       display: grid;
       grid-template-columns: 1fr;
@@ -410,7 +413,6 @@
       }
     }
 
-    /* Vista propietario: Turnos y Mes/Pago */
     .owner-shifts-layout,
     .owner-pay-layout {
       display: grid;
@@ -439,7 +441,7 @@
       }
     }
 
-    /* Compactación vertical en tablet / apaisado */
+    /* Compactación vertical en modo tablet / apaisado */
     body.tablet-mode .app-shell {
       padding-top: 8px;
       padding-bottom: 68px;
@@ -589,6 +591,7 @@
       }
     }
 
+    /* Cronómetro y fichaje */
     .chrono-top {
       display: flex;
       justify-content: space-between;
@@ -749,7 +752,7 @@
       white-space: nowrap;
     }
 
-    /* Tareas y Turnos */
+    /* Tareas y turnos */
     .task-row {
       display: flex;
       align-items: center;
@@ -884,7 +887,7 @@
       border-top: 1px solid var(--border);
     }
 
-    /* Bottom nav fija */
+    /* Barra inferior fija */
     .bottom-dock {
       position: fixed;
       left: 50%;
@@ -1077,7 +1080,7 @@
 
     <div id="empTopAlertBanner" class="over1h-banner hidden"></div>
 
-    <!-- Pestaña 1: Fichar / Tareas (Izquierda fichaje, Derecha tareas) -->
+    <!-- Pestaña 1: Fichar / Tareas -->
     <div id="empViewFichar" class="emp-fichaje-layout">
       <div class="card">
         <div class="chrono-top">
@@ -1173,7 +1176,7 @@
       </div>
     </div>
 
-    <!-- Vistas superiores (mutuamente excluyentes con las inferiores) -->
+    <!-- Vistas superiores -->
     <div id="ownerTopEmployeesView" class="grid-2 hidden">
       <div class="card stack">
         <div class="section-kicker" style="margin:0;">Empleadas registradas</div>
@@ -1256,8 +1259,7 @@
       </div>
     </div>
 
-    <!-- Vistas inferiores (Turnos, Tareas, Chat) -->
-    <!-- Turnos: Izquierda turnos de hoy, Derecha calendario -->
+    <!-- Vistas inferiores -->
     <div id="ownerBotShiftsView" class="owner-shifts-layout">
       <div class="card">
         <div class="card-title">
@@ -1460,7 +1462,6 @@
         return STATE_KEY_PREFIX + normalizeCode(code);
       }
 
-      // Conversión automática de arrays antiguos o diccionarios a mapa normalizado por ID
       function toIdMap(val, idPrefix = "item") {
         const out = {};
         if (!val) return out;
@@ -1629,7 +1630,6 @@
         return entered === fallbackMaster || hashPass(entered) === hashPass(fallbackMaster);
       }
 
-      // Validación estricta de contraseña de administrador para acciones sensibles (borrar empleada)
       function isStrictAdminPasswordValid(rawPass) {
         const entered = String(rawPass || "").trim();
         if (!entered) return false;
@@ -1644,12 +1644,10 @@
         return entered === masterPass || hashPass(entered) === hashPass(masterPass);
       }
 
-      // Identificador único de pestaña/dispositivo para evitar eco sonoro en el emisor
       const CLIENT_INSTANCE_ID = "cli_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
       const seenAlertMessageIds = new Set();
       let hasInitializedAlertBaseline = false;
 
-      // --- Desbloqueo automático de AudioContext + Patrón repetitivo "ti-ti, ti-ti, ti-ti, ti-ti" ---
       let audioCtxRef = null;
       let chatAlertActive = false;
       let chatTiTiTimer = null;
@@ -1725,7 +1723,6 @@
         playToneSequence([783.99, 523.25], 95, "triangle", 0.16);
       }
 
-      // Patrón repetitivo "ti-ti, ti-ti, ti-ti, ti-ti"
       function playTiTiQuadPattern() {
         const ctx = getAudioContext();
         if (!ctx) return;
@@ -1829,12 +1826,10 @@
         };
       }
 
-      // Reglas exactas de sonido y alerta por destinatario
       function shouldPlayBeepForMessage(msg, empChannelId) {
         if (!msg || typeof msg !== "object") return false;
         if (!sess.loggedIn || !sess.role) return false;
 
-        // Nunca sonar en la instancia/pestaña que originó el evento
         if (msg.actorClientId && String(msg.actorClientId) === CLIENT_INSTANCE_ID) {
           return false;
         }
@@ -1844,7 +1839,6 @@
           ? String((db.employees && db.employees[sess.employeeId] && db.employees[sess.employeeId].name) || "").trim().toLowerCase()
           : String(sess.ownerName || "").trim().toLowerCase();
 
-        // Si soy empleada, solo me conciernen mensajes del canal de mi propio empId
         if (myRole === "emp" && empChannelId && String(empChannelId) !== String(sess.employeeId)) {
           return false;
         }
@@ -1947,7 +1941,6 @@
         return msg;
       }
 
-      // --- Aislamiento multi-casa con ID único aleatorio en Firebase + Alias visible ---
       let homeAliasMap = {};
       try {
         homeAliasMap = JSON.parse(localStorage.getItem(HOME_ALIAS_MAP_KEY) || "{}") || {};
@@ -2205,7 +2198,6 @@
         renderApp();
       }
 
-      // --- Escrituras atómicas en Firebase Realtime Database ---
       const FIREBASE_CONFIG = {
         apiKey: "AIzaSyDYZFEZOYVwZmRnP9GYlYHz-vuEceD3O84",
         authDomain: "homecontrol-casa.firebaseapp.com",
@@ -3130,7 +3122,6 @@
         }
       }
 
-      // Modal de confirmación con validación estricta de contraseña de administrador antes de eliminar empleada
       function openDeleteEmployeeStrictModal(empId) {
         const emp = empId && db.employees && db.employees[empId];
         if (!emp) return;
@@ -3614,19 +3605,34 @@
           toast(`Perfil de ${name} guardado`);
         };
 
+        // Acceso de propietario con validación estricta de nombre y contraseña
         document.getElementById("enterOwnerBtn").onclick = () => {
-          const name = document.getElementById("ownerNameInput").value.trim() || "Fran";
-          const pass = document.getElementById("ownerPassInput").value.trim();
-          if (!pass) {
-            toast("Debes introducir tu contraseña para entrar como propietario");
-            document.getElementById("ownerPassInput").focus();
+          const nameInput = document.getElementById("ownerNameInput");
+          const passInput = document.getElementById("ownerPassInput");
+          const name = nameInput ? nameInput.value.trim() : "";
+          const pass = passInput ? passInput.value.trim() : "";
+
+          if (!name) {
+            toast("Debes introducir tu nombre de propietario");
+            if (nameInput) nameInput.focus();
             return;
           }
 
-          const existingProf = userProfiles.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "owner");
+          if (!pass) {
+            toast("Debes introducir tu contraseña para entrar como propietario");
+            if (passInput) passInput.focus();
+            return;
+          }
+
+          const existingProf = userProfiles.find(
+            (u) => u && u.role === "owner" && String(u.name || "").trim().toLowerCase() === name.toLowerCase()
+          );
           if (existingProf && !verifyProfilePassword(existingProf, pass)) {
             toast("Contraseña incorrecta");
-            document.getElementById("ownerPassInput").focus();
+            if (passInput) {
+              passInput.value = "";
+              passInput.focus();
+            }
             return;
           }
 
@@ -3659,7 +3665,7 @@
           sess.ownerTopOverlay = null;
           sess.ownerBottomTab = "shifts";
           sess.shiftSelectedDateISO = todayISO();
-          document.getElementById("ownerPassInput").value = "";
+          if (passInput) passInput.value = "";
           registerAlertBaseline(db.chats);
           refreshNow();
           subscribeHome(code);
@@ -3715,7 +3721,6 @@
           };
         });
 
-        // ENTRADA: tono local breve + escritura atómica del shift activo + mensaje al chat para propietarios
         document.getElementById("btnPunchIn").onclick = () => {
           const empId = sess.employeeId;
           if (!empId || getActiveShift(empId)) return;
@@ -3754,7 +3759,6 @@
           toast(`Entrada fichada (${formatHHMM(now)})`);
         };
 
-        // SALIDA: confirmación + escritura atómica del shift cerrado (pending) + mensaje al chat para propietarios
         function openConfirmPunchOutModal() {
           const empId = sess.employeeId;
           const active = getActiveShift(empId);
@@ -3833,7 +3837,6 @@
           renderEmployeeScreen();
         };
 
-        // Chat empleada -> suena a propietarios, no a sí misma
         document.getElementById("empChatForm").onsubmit = (e) => {
           e.preventDefault();
           const inp = document.getElementById("empChatInput");
@@ -3894,7 +3897,6 @@
           };
         });
 
-        // Tareas: escritura atómica únicamente en tasks/{taskId}, sin tocar jamás shifts
         document.getElementById("taskEmpSelect").onchange = (e) => {
           sess.selectedEmpId = e.target.value || null;
           saveSession();
@@ -4195,7 +4197,6 @@
           };
         };
 
-        // Chat propietario -> suena a demás propietarios y empleada, NO a sí mismo
         document.getElementById("ownerChatForm").onsubmit = (e) => {
           e.preventDefault();
           const empId = sess.selectedEmpId;
